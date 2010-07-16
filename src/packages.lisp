@@ -26,4 +26,5 @@
    :html-stream
    :present
    :present*
-   #:call-handler))
+   #:call-handler
+   #:session-value))
