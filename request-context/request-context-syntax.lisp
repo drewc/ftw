@@ -43,7 +43,8 @@
 
 (defun plist-name (symbol)
   (let* ((string (symbol-name symbol)))
-    (when  (and (eql #\[ (aref string (- (length string) 2)))
+    
+    (when  (and (> (length string) 2) (eql #\[ (aref string (- (length string) 2)))
 				 (eql #\] (aref string (- (length string) 1))))
       (subseq string 0 (- (length string) 2)))))
 
