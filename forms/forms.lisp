@@ -62,10 +62,15 @@
 				   :checked (getf option :checked)
 				   :value (or (getf option :value)
 					      "")))
-		     (progn 
-		       (<:input :type type
-				:name (getf input :input-name)
-				:value (and value value))
+		     (progn
+		       (if (getf input :id)
+			   (<:input :type type
+				    :id (getf input :id)
+				    :name (getf input :input-name)
+				    :value (and value value))
+			   (<:input :type type
+				    :name (getf input :input-name)
+				    :value (and value value)))
 		       (if invalid 
 			   (<:div 
 			    :class "validation-error-message error rounded"
@@ -120,6 +125,7 @@
 		    :options (getf (cdr input) :options)
 		    :optional (getf (cdr input) :optional)
 		    :name (first input)
+		    :id (getf (cdr input) :id)
 		    :label (or (getf (cdr input) :label) 
 			       (first input))
 		    :input-name (string-downcase 
