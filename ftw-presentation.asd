@@ -5,4 +5,4 @@
   :components ((:module :presentation
                 :components ((:file "presentation"))))
   :serial t
-  :depends-on (:contextl))
+  :depends-on (:contextl :arnesi))
