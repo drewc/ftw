@@ -27,8 +27,10 @@
   function must be a function that takes a single argument, the
   context, and returns a function that takes a single argument, the
   continuation. See MAKE-DISPATCH-FUNCTION."  
-  name function priority)
+  (name (error "handlers must have names"))
+  function (priority 0))
 
+    
 (defun add-dispatch-handler (dispatcher handler)
   "Add a handler ``handler'' to ``dispatcher''. This will set
 DISPATCHER-HANDLERS to a list including ``handler'' and the
@@ -45,7 +47,6 @@ If a handler with the same name exists, it will be removed prior to adding ``han
 (defun find-dispatch-handler (dispatcher item &rest args)
   "Return handler named ``name'' or NIL"
   (apply #'find item (dispatcher-handlers dispatcher) (or args (list :key #'dispatch-handler-name))))
-
 
 (defun delete-dispatch-handler (dispatcher handler)
   "destructively remove ``handler'' from ``dispatcher'' "

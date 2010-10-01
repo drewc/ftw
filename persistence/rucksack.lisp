@@ -42,7 +42,6 @@
   (:method ((class symbol))
     (add-class-to-rucksack (find-class class)))
   (:method ((class distributed-persistent-class))
-   (warn "Adding ~A" class)
     (rs::update-indexes class)
     (rs::update-slot-info class))
   (:method :before ((class distributed-persistent-class)) 

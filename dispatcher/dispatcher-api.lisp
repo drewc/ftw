@@ -14,7 +14,6 @@
   (:use )
   (:documentation "A namespace for dispatchers"))
 
-
 (defun dispatcher-symbol-name
  (name)
   (intern (format nil "~A::~A" (package-name (symbol-package name)) 
