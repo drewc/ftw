@@ -46,43 +46,48 @@
 				(input-map-invalid-inputs input-map)
 				:test #'equalp)))
 	      (success-message (getf input :validation-success-message)))
+
 	 (funcall 
 	  input-wrapper
 	  (lambda () 
 	    (<:div 
-	     :class "ftw-form-input"
-	     (when (not (alexandria:emptyp (string (getf input :label))))
-	       (<:div :class "ftw-form-input-label"
-		      (<:label 
-		       (<:as-html (getf input :label)))))
-	     (<:div 
-	      :class "ftw-form-input-value" 
-	      (if (string-equal type "radio")
-		  (loop for option in (getf input :options)
-		     :do 		 
-		     (<:as-html  " "
-				 (getf option :label))
-
-		     (<:input :type "radio"
-			      :name (getf input :input-name)
-			      :checked (getf option :checked)
-			      :value (or (getf option :value)
-					 "")))
-		  (progn 
-		    (<:input :type type
-			     :name (getf input :input-name)
-			     :value (and value value))
-		    (if invalid 
-			(<:div 
-			 :class "validation-error-message error rounded"
-			 (<:span 
-			  (<:as-html (rest invalid))))
-			(when (and success-message
-				   (not (null value)))
-			  (<:div 
-			   :class "validation-success-message success rounded"
-			   (<:span
-			    (<:as-html success-message)))))))))))))))
+	  :class "ftw-form-input"
+	  (when (not (alexandria:emptyp (string (getf input :label))))
+	     (<:div :class "ftw-form-input-label"
+		    (<:label 
+		     (<:as-html (getf input :label)))))
+	  (<:div 
+		 :class "ftw-form-input-value" 
+		 (if (string-equal type "radio")
+		     (loop for option in (getf input :options)
+			:do 		 
+			  (<:as-html  " "
+			   (getf option :label))
+			  (<:input :type "radio"
+				   :name (getf input :input-name)
+				   :checked (getf option :checked)
+				   :value (or (getf option :value)
+					      "")))
+		     (progn
+		       (if (getf input :id)
+			   (<:input :type type
+				    :id (getf input :id)
+				    :name (getf input :input-name)
+				    :value (and value value))
+			   (<:input :type type
+				    :name (getf input :input-name)
+				    :value (and value value)))
+		       (if invalid 
+			   (<:div 
+			    :class "validation-error-message error rounded"
+			    (<:span 
+			     (<:as-html (rest invalid))))
+			   (when (and success-message
+				      (not (null value)))
+			     (<:div 
+			      :class "validation-success-message success rounded"
+			(<:span
+			 (<:as-html success-message)))))))))))))))
 
 (defun match-input-map (input-map)
   (every 
@@ -126,6 +131,7 @@
 		    :options (getf (cdr input) :options)
 		    :optional (getf (cdr input) :optional)
 		    :name (first input)
+		    :id (getf (cdr input) :id)
 		    :label (or (getf (cdr input) :label) 
 			       (first input))
 		    :input-name (string-downcase 
