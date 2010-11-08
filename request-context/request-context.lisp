@@ -58,8 +58,7 @@
 
 (define-layered-function request-path-name (path)
   (:method (path)
-   (let ((pos (position #\/ path :from-end t)))
-     	   
+   (let ((pos (position #\/ path :from-end t)))     	   
      (when pos (subseq path pos)))))
 
 (define-layered-function send-redirect (context target message))

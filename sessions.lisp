@@ -12,7 +12,9 @@
   ((value-table :initform   
 		(make-hash-table 
 		 :test #'equal 
-		 :synchronized t))))
+		 :synchronized t))
+   (creation-time :accessor session-creation-time
+		  :initform (get-universal-time))))
 
 (defun session-value (session key)
   (gethash key (slot-value session 'value-table)))
@@ -47,7 +49,6 @@
     (setf (context :session) session)
     (call-next-handler)))
   
-
 (defun random-string (&optional (length 32) (alphabet "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"))
   "Returns a random alphabetic string.
 
