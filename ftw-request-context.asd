@@ -11,4 +11,4 @@
 			     (:file "http-status-codes"))
 		:serial t))
 
-  :depends-on (#:contextl #:arnesi))
+  :depends-on (#:contextl #:arnesi #:hunchentoot))

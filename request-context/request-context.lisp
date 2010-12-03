@@ -34,6 +34,9 @@
 (define-layered-function find-cookie (context name))
 (define-layered-function cookie-value (context name &optional default))
 (define-layered-function add-cookie (context name value &key comment domain max-age path secure))
+(define-layered-function response-header-value (context name))
+(define-layered-function (setf response-header-value) (value context name))
+
 
 (define-layered-function parameters-as-plist (context name &key method package)
   (:method (context name &key method (package *package*))
@@ -94,8 +97,9 @@
   (:method-combination arnesi:wrapping-standard))
 
 (define-layered-method continue-url (path &rest query)
+		       
   (with-output-to-string (href)
-    (write-string path href)
+    (write-string path href)    
     (when query
       (let* (names)		       
       (write-char #\? href)
@@ -109,11 +113,9 @@
 	 do (princ (escape-as-uri (princ-to-string  value)) href)
 	 when rest
 	 do (write-char #\& href))
-      	(map-parameters 
-	 (lambda (k v)
+      (loop for (k . v) in (hunchentoot:get-parameters*) :do 
 	   (unless (find k names :test #'string-equal)
-	     (format href "&~A=~A" k v)))
-	 (current-request-context))))))
+	     (format href "&~A=~A" k v)))))))
 
 
 

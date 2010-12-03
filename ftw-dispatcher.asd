@@ -9,4 +9,4 @@
 			     (:file "monads")
 			     (:file "functional-dispatcher"))
 		:serial t))
-  :depends-on (:ftw-request-context))
+  :depends-on (:hunchentoot))

@@ -19,14 +19,14 @@
   (invalid-inputs :accessor input-map-invalid-inputs
 		  :initform nil)))
 
-(defun find-input (map name)
+(defun find-input (map name &key (test #'eql))
   (find name (input-map-canonicalized-inputs map)
+	:test test
 	:key (lambda (input)
 	       (getf input :name))))
 
 (defun input-value (input)
-  (parameter-value 
-   (current-request-context)
+  (ftw-monadic-dispatcher:parameter-value 
    (getf input :input-name)))
     
 
@@ -38,9 +38,7 @@
      (dolist (input (input-map-canonicalized-inputs input-map))
        (let* ((type (getf input :type))
 	      (submit (string-equal type 'submit))
-	      (value (parameter-value 
-		      (current-request-context)
-		      (getf input :input-name)))
+	      (value (input-value input))
 	      (invalid (when (not submit)
 			 (assoc (getf input :input-name)
 				(input-map-invalid-inputs input-map)
@@ -93,15 +91,14 @@
   (every 
    #'identity 
    (mapcar (lambda (input) 
-	     (parameter-value (current-request-context)
-			      (getf input :input-name)))
+	     (ftw-monadic-dispatcher:parameter-value (getf input :input-name)))
 	   (input-map-canonicalized-inputs input-map))))
 
 (defun input-map-valid-p (input-map)
   (setf (input-map-invalid-inputs input-map) nil)
   (mapc (lambda (input) 
 	  (let* ((name (getf input :input-name))
-		 (value (parameter-value (current-request-context)
+		 (value (ftw-monadic-dispatcher:parameter-value 
 					 name))
 		 (error-message (getf input :validation-error-message))
 		 (validator (getf input :validate-using)))

@@ -1,5 +1,5 @@
 (defpackage #:ftw-monadic-dispatcher
-  (:use :cl :ips-monads)
+  (:use :cl :ips-monads )
   (:export #:ftw-dispatch 
 	   #:.let* #:.return
 	   #:finish
@@ -12,7 +12,12 @@
 	   #:.set
 	   #:.get
 	   #:send
-	   #:maybe)
+	   #:maybe
+	   #:run
+	   #:hunchentoot-dispatcher
+	   #:.and
+	   #:redirect-to
+	   #:parameter-value)
   (:documentation 
    "A monadic, side effect free, continuation using dispatcher handler"))
 
@@ -24,20 +29,33 @@
 
 (defparameter <dispatcher> (make-instance '<dispatcher>))
 
+(defvar *output-stream* *standard-output*)
+
 (defmacro .let* (bindings &body body)
   `(mlet* (,(gensym) <dispatcher>)
        ,bindings ,@body))
 
-(defun run (dispatcher &key context)
+(defun run (dispatcher &key request)
   (funcall 
    (funcall 
     (let ((m <dispatcher>))			  
       (call/cc m (lambda (finish)
 		   (mlet* m 
-		       ((_ (put m (list finish context))))
+		       ((_ (put m (list finish request))))
 		     dispatcher))))
     'identity)		    
-   context))
+   request))
+
+(defun hunchentoot-dispatcher 
+    (request dispatcher &key (wrapper 'identity))
+  (flet ((dispatch ()
+	  (first (run dispatcher :request request))))
+    (let* ((*output-stream* (make-string-output-stream))
+	   (s *output-stream*))
+      (when (funcall wrapper #'dispatch)
+	(lambda () (get-output-stream-string s))))))
+
+
 
 (defun finish (&optional (result t))
   (.let* ((state (fetch <dispatcher>)))
@@ -52,7 +70,6 @@
        (.let* ((state (fetch <dispatcher>))
 	       (_ (call/cc 
 		   m (lambda (fail)
-
 		       (.let* ((_ (put m (cons fail (cdr state))))
 			       (v (first mvs)))
 			 (funcall win (lambda (s) 
@@ -63,7 +80,13 @@
 	     (apply #'plus m (rest mvs))
 	     (zero m))))))
 
-		  
+
+(defun .and (dispatcher &rest dispatchers)
+  (if dispatchers
+      (.let* ((_ dispatcher))
+	(apply #'.and dispatchers))
+      dispatcher))
+    
 (defun ftw-dispatch (context dispatcher)
   (lambda (next-handler)
     (destructuring-bind (value . _)
@@ -75,7 +98,7 @@
 (defun send (function &rest args)
   (lambda (k) 
     (declare (ignore k))
-    (lambda (s)   
+    (lambda (s)
       (apply function args)
       (cons (list* 'sent function args) s))))
 
@@ -107,10 +130,17 @@
 (defun .get (name)
   (.let* ((map (context-value-map)))
     (.return (cdr (assoc name map)))))
-   	  
+
+(defun uri ()
+  (.let* ((uri (.get 'uri))
+	  (_ (if uri 
+		 (.return uri) 
+		 (.set 'uri (puri:parse-uri (hunchentoot:request-uri*))))))
+    (.get 'uri)))
+
 (defun path  ()
-  (.let* ((context (context)))
-    (.return (ftw-request-context:request-path context))))
+1  (.let* ((uri (uri)))
+    (.return (puri:uri-path uri)))) 
 
 (defun path= (test)
   (.let* ((path (path)))
@@ -120,16 +150,30 @@
 	(.return path)
 	(try-next-handler))))
 
+(defun parameter-value (name &optional method)
+  (let ((name (etypecase name
+		(symbol (string-downcase (symbol-name name)))
+		(string name))))
+  (ecase method
+    ((nil) (or (hunchentoot:get-parameter name)
+	       (hunchentoot:post-parameter name)))
+    (:post (hunchentoot:post-parameter name))
+    (:get (hunchentoot:get-parameter name)))))
+      
+       
 (defun param (name &key method parser)
   (.let* ((context (context)))
     (let ((parameter-value 
-	   (ftw-request-context:parameter-value context name :method method)))
+	   (parameter-value name method)))
       (if parameter-value 
 	  (.return (funcall (or parser 'identity) parameter-value))
 	  (try-next-handler)))))
 
 (defun maybe (dispatcher)
   (.or dispatcher (.return nil)))
+
+(defun redirect-to (url)
+  (send 'hunchentoot:redirect url))
 
 
 	
