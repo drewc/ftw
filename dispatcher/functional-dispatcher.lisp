@@ -107,7 +107,11 @@
   (apply #'plus <dispatcher> mvs))
 
 (defun .not (parser)
-  (.or parser (.return t)))
+  (let ((fail (gensym)))
+    (.let* ((test (.or parser (.return fail))))
+      (if (eq fail test)
+	  (.return t)
+	  (try-next-handler)))))
 
 (defun .return (value)
   (result <dispatcher> value))
