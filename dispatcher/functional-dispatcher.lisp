@@ -17,7 +17,8 @@
 	   #:hunchentoot-dispatcher
 	   #:.and
 	   #:redirect-to
-	   #:parameter-value)
+	   #:parameter-value
+	   #:.not)
   (:documentation 
    "A monadic, side effect free, continuation using dispatcher handler"))
 
@@ -104,6 +105,9 @@
 
 (defun .or (&rest mvs)
   (apply #'plus <dispatcher> mvs))
+
+(defun .not (parser)
+  (.or parser (.return t)))
 
 (defun .return (value)
   (result <dispatcher> value))
