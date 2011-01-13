@@ -18,7 +18,8 @@
 	   #:.and
 	   #:redirect-to
 	   #:parameter-value
-	   #:.not)
+	   #:.not
+	   #:params)
   (:documentation 
    "A monadic, side effect free, continuation using dispatcher handler"))
 
@@ -176,6 +177,14 @@
       (if parameter-value 
 	  (.return (funcall (or parser 'identity) parameter-value))
 	  (try-next-handler)))))
+
+(defun params (&key method)
+  (.return 
+   (ecase method
+     ((nil) (append (hunchentoot:get-parameters*)
+		    (hunchentoot:post-parameters*)))
+     (:post (hunchentoot:post-parameters*))
+     (:get (hunchentoot:get-parameters*)))))
 
 (defun maybe (dispatcher)
   (.or dispatcher (.return nil)))

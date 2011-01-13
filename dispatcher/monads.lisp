@@ -50,7 +50,12 @@
 		   (mlet* ,monad-name  ,(cdr bindings)
 		     ,@body)))))
       `(progn ,@body)))
-  
+
+(defclass <monad-transformer> ()
+  ((inner-monad :accessor inner 
+		:initarg :inner 
+		:initform <identity>)))  
+
 (defclass <identity> (<monad>) ())
 (defvar <identity> (make-instance '<identity>))
 
@@ -62,6 +67,7 @@
 		   ((a 1)
 		    (b 2))
 		 (result m (+ a b)))))
+
 
 (defclass <state> (<monad>) ())
 (defvar <state> (make-instance '<state>))
@@ -136,12 +142,12 @@
 (defgeneric plus (m &rest args))
 
 
-
 (defclass <maybe> (<monad> <zero-plus>) ())
 (defvar <maybe> (make-instance '<maybe>))
 
 (defmethod result ((m <maybe>) v)
   v)
+
 (defmethod bind ((m <maybe>) mv mf)
   (when mv (funcall mf mv)))
   
@@ -151,17 +157,34 @@
 	(apply #'plus m (rest mvs)))
       (zero m)))
 
-
 (defmethod fail ((m <maybe>))
   (zero m))
 
 (defmethod zero ((m <maybe>))
   nil)
 
-(defclass <monad-transformer> ()
-  ((inner-monad :accessor inner 
-		:initarg :inner 
-		:initform <identity>)))
+(defclass <error> (<maybe>) ())
+(defvar <error> (make-instance '<error>))
+(defstruct exception (message "error"))
+
+(defmethod bind ((m <error>) mv mf)
+  (if (exception-p mv)
+      mv 
+      (funcall mf mv)))
+
+(defmethod zero ((m <error>))
+  (make-exception))
+  
+(defmethod plus ((m <error>) &rest mvs)
+  (if (exception-p (first mvs))
+      (if (rest mvs) 
+	  (apply #'plus m (rest mvs))
+	  (first mvs))
+      (first mvs)))
+
+(defmethod signal-error ((m <error>) message)
+  (make-exception :message message))
+
 
 (defclass <state-transformer> (<monad-transformer> <state>)
   ())
@@ -232,6 +255,7 @@
   (lift m (fetch (inner m))))
 
 	       
+
        
 	   
 	   
