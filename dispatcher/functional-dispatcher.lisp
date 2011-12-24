@@ -92,7 +92,7 @@
 (defun ftw-dispatch (context dispatcher)
   (lambda (next-handler)
     (destructuring-bind (value . _)
-	(run dispatcher :context context)
+	(run dispatcher :request context)
       (declare (ignore _))
       (or value	
 	  (funcall next-handler context)))))
