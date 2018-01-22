@@ -1,7 +1,7 @@
 
 (asdf:defsystem #:ftw
-  :author "Drew Crampsie <drewc@tech.coop>"
-  :licence "MIT"
+  :author "Drew Crampsie <me@drewc.ca>"
+  :licence "Unlicense"
   :components ((:module :src
 		:components ((:file "packages")
 			     (:file "request-context-dispatcher")
