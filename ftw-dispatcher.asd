@@ -9,4 +9,5 @@
 			     (:file "monads")
 			     (:file "functional-dispatcher"))
 		:serial t))
-  :depends-on (:hunchentoot))
+  :depends-on (:hunchentoot
+	       :puri))
