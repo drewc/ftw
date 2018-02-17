@@ -14,6 +14,21 @@ module system on top of the Gambit runtime.
 
 See https://github.com/vyzo/gerbil.
 
+** Installation
+
+It is available as a ~gxpkg~ from *[[http://github.com/drewc/gerbil-ftw][github.com/drewc/gerbil-ftw]]*.
+
+#+BEGIN_SRC sh
+gxpkg install github.com/drewc/gerbil-ftw
+#+END_SRC
+
+For HACKING purposes, *[[https://github.com/drewc/ftw][github.com/drewc/ftw]]* is used, with the
+~./gerbil~ directory being the one. There can be only one.
+
+#+BEGIN_SRC sh
+gxpkg link github.com/drewc/gerbil-ftw ~/src/ftw/gerbil
+#+END_SRC
+
 * Common Lisp
 
 A lot of the old code is common lisp. It is in the ~lisp/~ and/or the
