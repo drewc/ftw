@@ -202,168 +202,174 @@ Be default, a string returned from a handler is sent as html.
 
 #+END_SRC
 
-* Respond
+* Implementation
 
-To respond, ~http-response-write~ is used.
+** Respond
 
-#+NAME: request-context-respond
-#+BEGIN_SRC scheme
-  (def (request-context-respond request-context value
-				status-code: (sc #f)
-				content-type: (ct #f)
-				headers: (h #f))
-    (let (reply (request-context-reply request-context))
-      (when ct
-	(reply-content-type-set! reply ct))
-      (http-response-write
-       (request-context-response request-context)
-       (or sc (reply-status-code reply))
-       (or h (reply-headers reply))
-       value)))
-#+END_SRC
+ In the end, all we want to do is respond to a request. To respond,
+ ~http-response-write~ is used. 
 
-** Current and Dynamic Request Context
+ If the ~status-code:~, ~headers:~ or ~content-type:~ are not used, we
+ get them from the reply.
 
-Using the *request* and *respose* passed from the *httpd*, A
-*request-context* is created and dynamically bound.
+ #+NAME: request-context-respond
+ #+BEGIN_SRC scheme
+   (def (request-context-respond request-context value
+				 status-code: (sc #f)
+				 content-type: (ct #f)
+				 headers: (h #f))
+     (let (reply (request-context-reply request-context))
+       (when ct
+	 (reply-content-type-set! reply ct))
+       (http-response-write
+	(request-context-response request-context)
+	(or sc (reply-status-code reply))
+	(or h (reply-headers reply))
+	value)))
+ #+END_SRC
 
-In ~call-with-request-context~, dy default, we respond using the
-values from *reply*. We capture a continuation as well, where we can
-short-circuit the process.
+*** Current and Dynamic Request Context
 
-#+NAME: call-with-request-context
-#+BEGIN_SRC scheme
-  (def current-request-context
-    (make-parameter #f))
+ Using the *request* and *respose* passed from the *httpd*, A
+ *request-context* is created and dynamically bound.
 
-  (def (call-with-request-context function
-				  request: (request (void))
-				  reply: (reply (create-reply))
-				  response: (response (void)))
-    (let (request-context
-	  (make-request-context
-	   request: request
-	   reply: reply
-	   response: response))
-      (parameterize ((current-request-context request-context))
-	(let/cc k
-	  (set! (request-context-return request-context) k)
-	  (let (value (function request-context))
-	    (request-context-respond request-context value))))))
-#+END_SRC
+ In ~call-with-request-context~, dy default, we respond using the
+ values from *reply*. We capture a continuation as well, where we can
+ short-circuit the process.
 
+ #+NAME: call-with-request-context
+ #+BEGIN_SRC scheme
+   (def current-request-context
+     (make-parameter #f))
 
-* Dynamic Functions*
+   (def (call-with-request-context function
+				   request: (request (void))
+				   reply: (reply (create-reply))
+				   response: (response (void)))
+     (let (request-context
+	   (make-request-context
+	    request: request
+	    reply: reply
+	    response: response))
+       (parameterize ((current-request-context request-context))
+	 (let/cc k
+	   (set! (request-context-return request-context) k)
+	   (let (value (function request-context))
+	     (request-context-respond request-context value))))))
+ #+END_SRC
 
-The entire reason behind a request context is so we can have functions
-that can interact without needing things to be passed.
+** Dynamic Functions*
 
-** ~respond*~ / ~abort*~ : outside the stack
-   :PROPERTIES:
-   :CUSTOM_ID: response_dynamic
-   :END:
+ The entire reason behind a request context is so we can have functions
+ that can interact without needing things to be passed.
 
-Although simply returning a thing responds, http-wise, with that
-thing, often we want to continue outside that.
+*** ~respond*~ / ~abort*~ : outside the stack
+    :PROPERTIES:
+    :CUSTOM_ID: response_dynamic
+    :END:
 
-That's why ~call-with-request-context~ sets up a return continuation.
+ Although simply returning a thing responds, http-wise, with that
+ thing, often we want to continue outside that.
 
-#+NAME: respond*-and-abort*
-#+BEGIN_SRC scheme
-  (def (respond* value
-		 content-type: (ct #f)
-		 status-code: (c #f)
-		 headers: (h #f))
-    ((request-context-return (current-request-context))
-     (request-context-respond
-      (current-request-context) 
-      value status-code: c headers: h content-type: ct)))
+ That's why ~call-with-request-context~ sets up a return continuation.
 
-  (def (abort*)
-    ((request-context-return (current-request-context))
-     (void)))  
-#+END_SRC
+ #+NAME: respond*-and-abort*
+ #+BEGIN_SRC scheme
+   (def (respond* value
+		  content-type: (ct #f)
+		  status-code: (c #f)
+		  headers: (h #f))
+     ((request-context-return (current-request-context))
+      (request-context-respond
+       (current-request-context) 
+       value status-code: c headers: h content-type: ct)))
 
-** ~content-type*~
+   (def (abort*)
+     ((request-context-return (current-request-context))
+      (void)))  
+ #+END_SRC
 
-Sometimes HTML is not what the contents of the response contains. We
-can ~set!~ it as well.
+*** ~content-type*~
 
-#+NAME: content-type*
-#+BEGIN_SRC scheme
-  (def (content-type*)
-    (reply-content-type (request-context-reply (current-request-context))))
+ Sometimes HTML is not what the contents of the response contains. We
+ can ~set!~ it as well.
 
-  (def (content-type*-set! content-type)
-    (reply-content-type-set!
-     (request-context-reply (current-request-context))
-     content-type))       
-#+END_SRC
+ #+NAME: content-type*
+ #+BEGIN_SRC scheme
+   (def (content-type*)
+     (reply-content-type (request-context-reply (current-request-context))))
 
-** ~status-code*~
+   (def (content-type*-set! content-type)
+     (reply-content-type-set!
+      (request-context-reply (current-request-context))
+      content-type))       
+ #+END_SRC
 
-
-#+BEGIN_SRC scheme
-
-  (def current-request-context
-    (make-parameter #f))
-
-  (def (respond* value
-		 status-code: (c #f)
-		 headers: (h #f))
-    ((request-context-return (current-request-context))
-     (request-context-respond
-      (current-request-context) value status-code: c headers: h)))
-
-  (def (abort*)
-    ((request-context-return (current-request-context))
-     (void)))
-
-  (def (content-type*)
-    (reply-content-type (request-context-reply (current-request-context))))
-
-  (def (content-type*-set! content-type)
-    (reply-content-type-set!
-     (request-context-reply (current-request-context))
-     content-type))
+*** ~status-code*~
 
 
-  (def (call-with-request-context
-	function
-	request: (request (void))
-	reply: (reply (create-reply))
-	response: (response (void)))
-    (let (request-context
-	  (make-request-context
-	   request: request
-	   reply: reply
-	   response: response))
-      (parameterize ((current-request-context request-context))
-	(let/cc k
-	  (set! (request-context-return request-context) k)
-	  (let (value (function request-context))
-	    (request-context-respond request-context value))))))
+ #+BEGIN_SRC scheme
 
-  (import :ftw/server)
+   (def current-request-context
+     (make-parameter #f))
 
-  (defclass (test-request-context-server ftw-server)())
+   (def (respond* value
+		  status-code: (c #f)
+		  headers: (h #f))
+     ((request-context-return (current-request-context))
+      (request-context-respond
+       (current-request-context) value status-code: c headers: h)))
 
-  (defmethod (ftw-server-handler (server test-request-context-server))
-    (lambda (req res)
-      (call-with-request-context
-       (lambda (c) (set! (content-type*) "text/plain")
-	       (respond* (http-request-url
-			  (request-context-request
-			   (current-request-context)))))
-       request: req response: res)))
+   (def (abort*)
+     ((request-context-return (current-request-context))
+      (void)))
 
-  (def server (make-test-request-context-server))
+   (def (content-type*)
+     (reply-content-type (request-context-reply (current-request-context))))
 
-  (start-ftw-server! server)
+   (def (content-type*-set! content-type)
+     (reply-content-type-set!
+      (request-context-reply (current-request-context))
+      content-type))
+
+
+   (def (call-with-request-context
+	 function
+	 request: (request (void))
+	 reply: (reply (create-reply))
+	 response: (response (void)))
+     (let (request-context
+	   (make-request-context
+	    request: request
+	    reply: reply
+	    response: response))
+       (parameterize ((current-request-context request-context))
+	 (let/cc k
+	   (set! (request-context-return request-context) k)
+	   (let (value (function request-context))
+	     (request-context-respond request-context value))))))
+
+   (import :ftw/server)
+
+   (defclass (test-request-context-server ftw-server)())
+
+   (defmethod (ftw-server-handler (server test-request-context-server))
+     (lambda (req res)
+       (call-with-request-context
+	(lambda (c) (set! (content-type*) "text/plain")
+		(respond* (http-request-url
+			   (request-context-request
+			    (current-request-context)))))
+	request: req response: res)))
+
+   (def server (make-test-request-context-server))
+
+   (start-ftw-server! server)
        
 
   
-#+END_SRC
+ #+END_SRC
+
 
 * /file/ request-context
 
