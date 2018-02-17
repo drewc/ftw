@@ -1,0 +1,425 @@
+#+TITLE: FTW! Request Context
+
+Basically, the cycle of a webapp goes something like this.
+
+    : request -> process -> response
+
+It is the process stage in which our programming lays. In processing,
+we are formulating a *reply* to the *request*, and it ends with and
+issue of a *response*. For convenience sake, there is also a *return*
+function.
+
+#+NAME: request-context-class
+#+BEGIN_SRC scheme
+  (defclass request-context
+    (request reply return response))
+#+END_SRC
+
+* Usage
+
+The *request-context* is what allows us to write functions to handle
+requests without having to bother passing the details.
+
+#+NAME: test-import
+#+BEGIN_SRC scheme
+(import :ftw/server/request-context
+	:ftw/http-status-code
+	:ftw/server
+	:ftw/server/reply
+	(only-in :gerbil/gambit/exceptions display-exception)
+	:std/net/httpd :std/sugar :std/generic :std/net/request)
+
+#+END_SRC
+
+We'll simply declare a hash to hold the handlers for urls, and call
+those functions.
+
+#+NAME: test-request-context-handlers
+#+BEGIN_SRC scheme 
+  (def request-context-handlers (make-hash-table test: equal?))
+#+END_SRC
+
+If there's nothing hashed, We'll return a /404/. Since
+~:ftw/http-status-code~ already exists, and [[#response_dynamic][~respond*~]] is a reasoning
+behind a dynamic *request-context*, We'll use it.
+
+#+NAME: test-return-status-code
+#+BEGIN_SRC scheme
+  (def (return-status-code (code +http-ok+))
+    (respond*
+     (http-status-code-message code)
+     status-code: code
+     content-type: "text/plain; charset=us-ascii"))
+#+END_SRC
+
+Note that the function itself is not passed anything to do with the
+request or response, yet it works! In *Common Lisp*, we'd declare it
+as very /special/, however, I think such terminology is frowned upon
+in the scheme land, so let us say it is has very /dynamic parameters/.
+
+** ~request-context-handler~ 
+
+Using the hash and the status code, we can write a handler.
+
+#+NAME: test-request-context-handler
+#+BEGIN_SRC scheme
+  (def (request-context-handler request-context)
+    (let ((response
+	   (hash-get
+	    request-context-handlers
+	    (http-request-url (request-context-request
+			       request-context)))))
+      (try
+       (if response
+       (response)
+       (return-status-code +http-not-found+))
+       (catch (e)
+	 (respond* (with-output-to-string
+		     "Error: " (cut display-exception e))
+		   content-type: "text/plain; charset=us-ascii"
+		   status-code: +http-internal-server-error+)))))
+#+END_SRC
+
+** A request context ~ftw-server~
+
+It's within the ~ftw-server-handler~ that ~call-with-request-context~
+is used.
+
+#+NAME: test-server-start
+#+BEGIN_SRC scheme
+  (defclass (test-request-context-server ftw-server)())
+
+  (defmethod (ftw-server-handler (server test-request-context-server))
+    (lambda (req res)
+      (call-with-request-context
+       request-context-handler
+       request: req response: res)))
+
+  (def server (make-test-request-context-server address: "localhost:8443"))
+
+  ;; (start-ftw-server! server)
+
+  ;;  (stop-ftw-server! server)
+#+END_SRC
+
+** ~define-response~
+
+A wee bit o' syntax is always fun. This just puts things in the hash.
+
+#+NAME: test-define-response
+#+BEGIN_SRC scheme
+  (defrules define-response ()
+    ((_ url body ...)
+     (hash-put! request-context-handlers url
+		(lambda () body ...))))
+#+END_SRC
+
+** A ~test>~ macro, with an outcome using ~=>~.
+
+#+NAME: test-prompt-macro
+#+BEGIN_SRC scheme
+  (defrules test> (=>)
+    ((_ test => predicate result)
+     (let ((actual test))
+       (if (predicate actual result)
+	 #t
+	 (error "Test: " test "Failed. Wanted: "
+		result " Got: " actual))))
+    ((_ test => result)
+     (test> test => equal? result))) 
+#+END_SRC
+
+Which is simple to use.
+
+#+BEGIN_SRC scheme
+  (test> (even? 2) => #t) ;=> #t
+
+  (test> (odd? 0) => #t)
+  ;; Evaluation aborted on Test:  #f "Failed. Wanted: " #t " Got: " #f
+
+  (test> "foo" => eq? "foo")
+
+  ;; Evaluation aborted on Test: "foo" "Failed. Wanted: " "foo" " Got: " "foo"
+
+#+END_SRC
+
+** Testing out responses
+
+So, with no responses defined, everything should now be /404/'d.
+
+#+NAME: test-not-found
+#+BEGIN_SRC scheme
+  (let* ((request (http-get "http://localhost:8443/not-found"))
+	 (text (request-text request))
+	 (status (request-status request)))
+
+    (test> text
+	   => "Not Found")
+
+    (test> status
+	   => 404))
+#+END_SRC
+
+** Simple HTML
+
+Be default, a string returned from a handler is sent as html.
+
+#+NAME: test-simple-html
+#+BEGIN_SRC scheme
+  (def test-html  "<strong>Test!</strong>")
+
+  (define-response "/test" test-html)
+
+  (let* ((request (http-get "http://localhost:8443/test"))
+	 (text (request-text request))
+	 (status (request-status request))
+	 (content-type (cdr (assoc "Content-Type" (request-headers request)))))
+
+      (test> text => test-html)
+
+      (test> status => 200)
+
+      (test> content-type =>  "text/html"))
+#+END_SRC
+
+** Internal Server Error
+
+#+NAME: test-error
+#+BEGIN_SRC scheme
+  (define-response "/error"
+    (error "Testing Errors"))
+
+  (let* ((request (http-get "http://localhost:8443/error"))
+	   (text (request-text request))
+	   (status (request-status request))
+	   (content-type (cdr (assoc "Content-Type" (request-headers request)))))
+
+	(test> text => "Error: Testing Errors\n")
+
+	(test> status => 500)
+
+	(test> content-type =>  "text/plain; charset=us-ascii"))
+
+#+END_SRC
+
+* Respond
+
+To respond, ~http-response-write~ is used.
+
+#+NAME: request-context-respond
+#+BEGIN_SRC scheme
+  (def (request-context-respond request-context value
+				status-code: (sc #f)
+				content-type: (ct #f)
+				headers: (h #f))
+    (let (reply (request-context-reply request-context))
+      (when ct
+	(reply-content-type-set! reply ct))
+      (http-response-write
+       (request-context-response request-context)
+       (or sc (reply-status-code reply))
+       (or h (reply-headers reply))
+       value)))
+#+END_SRC
+
+** Current and Dynamic Request Context
+
+Using the *request* and *respose* passed from the *httpd*, A
+*request-context* is created and dynamically bound.
+
+In ~call-with-request-context~, dy default, we respond using the
+values from *reply*. We capture a continuation as well, where we can
+short-circuit the process.
+
+#+NAME: call-with-request-context
+#+BEGIN_SRC scheme
+  (def current-request-context
+    (make-parameter #f))
+
+  (def (call-with-request-context function
+				  request: (request (void))
+				  reply: (reply (create-reply))
+				  response: (response (void)))
+    (let (request-context
+	  (make-request-context
+	   request: request
+	   reply: reply
+	   response: response))
+      (parameterize ((current-request-context request-context))
+	(let/cc k
+	  (set! (request-context-return request-context) k)
+	  (let (value (function request-context))
+	    (request-context-respond request-context value))))))
+#+END_SRC
+
+
+* Dynamic Functions*
+
+The entire reason behind a request context is so we can have functions
+that can interact without needing things to be passed.
+
+** ~respond*~ / ~abort*~ : outside the stack
+   :PROPERTIES:
+   :CUSTOM_ID: response_dynamic
+   :END:
+
+Although simply returning a thing responds, http-wise, with that
+thing, often we want to continue outside that.
+
+That's why ~call-with-request-context~ sets up a return continuation.
+
+#+NAME: respond*-and-abort*
+#+BEGIN_SRC scheme
+  (def (respond* value
+		 content-type: (ct #f)
+		 status-code: (c #f)
+		 headers: (h #f))
+    ((request-context-return (current-request-context))
+     (request-context-respond
+      (current-request-context) 
+      value status-code: c headers: h content-type: ct)))
+
+  (def (abort*)
+    ((request-context-return (current-request-context))
+     (void)))  
+#+END_SRC
+
+** ~content-type*~
+
+Sometimes HTML is not what the contents of the response contains. We
+can ~set!~ it as well.
+
+#+NAME: content-type*
+#+BEGIN_SRC scheme
+  (def (content-type*)
+    (reply-content-type (request-context-reply (current-request-context))))
+
+  (def (content-type*-set! content-type)
+    (reply-content-type-set!
+     (request-context-reply (current-request-context))
+     content-type))       
+#+END_SRC
+
+** ~status-code*~
+
+
+#+BEGIN_SRC scheme
+
+  (def current-request-context
+    (make-parameter #f))
+
+  (def (respond* value
+		 status-code: (c #f)
+		 headers: (h #f))
+    ((request-context-return (current-request-context))
+     (request-context-respond
+      (current-request-context) value status-code: c headers: h)))
+
+  (def (abort*)
+    ((request-context-return (current-request-context))
+     (void)))
+
+  (def (content-type*)
+    (reply-content-type (request-context-reply (current-request-context))))
+
+  (def (content-type*-set! content-type)
+    (reply-content-type-set!
+     (request-context-reply (current-request-context))
+     content-type))
+
+
+  (def (call-with-request-context
+	function
+	request: (request (void))
+	reply: (reply (create-reply))
+	response: (response (void)))
+    (let (request-context
+	  (make-request-context
+	   request: request
+	   reply: reply
+	   response: response))
+      (parameterize ((current-request-context request-context))
+	(let/cc k
+	  (set! (request-context-return request-context) k)
+	  (let (value (function request-context))
+	    (request-context-respond request-context value))))))
+
+  (import :ftw/server)
+
+  (defclass (test-request-context-server ftw-server)())
+
+  (defmethod (ftw-server-handler (server test-request-context-server))
+    (lambda (req res)
+      (call-with-request-context
+       (lambda (c) (set! (content-type*) "text/plain")
+	       (respond* (http-request-url
+			  (request-context-request
+			   (current-request-context)))))
+       request: req response: res)))
+
+  (def server (make-test-request-context-server))
+
+  (start-ftw-server! server)
+       
+
+  
+#+END_SRC
+
+* /file/ request-context
+
+#+BEGIN_SRC scheme :tangle "../../gerbil/server/request-context.ss" :noweb yes
+;; -*- Gerbil -*-
+(export #t)
+(import :ftw/server/reply :std/generic :std/net/httpd)
+
+<<request-context-class>>
+
+<<request-context-respond>>
+
+<<call-with-request-context>>
+
+<<respond*-and-abort*>>
+
+<<content-type*>>
+#+END_SRC
+
+
+
+
+
+* /file/ request-context-test
+
+#+BEGIN_SRC scheme :tangle "../../gerbil/server/request-context-test.ss" :noweb yes
+  ;; -*- Gerbil -*-
+  (export test-request-context)
+  <<test-import>>
+
+  <<test-return-status-code>>
+
+  <<test-request-context-handlers>>
+
+  <<test-request-context-handler>>
+
+  <<test-server-start>>
+
+  <<test-define-response>>
+
+  <<test-prompt-macro>>
+
+  (def (test-request-context)
+    (dynamic-wind
+      (cut start-ftw-server! server)
+      (lambda ()
+	<<test-not-found>>
+
+	<<test-simple-html>>
+
+	<<test-error>>
+       )
+
+      (cut stop-ftw-server! server)))
+
+
+#+END_SRC
+
+
