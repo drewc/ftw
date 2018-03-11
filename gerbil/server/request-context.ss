@@ -1,9 +1,42 @@
 ;; -*- Gerbil -*-
 (export #t)
-(import :ftw/server/reply :std/generic :std/net/httpd)
+(import :ftw/server/reply :std/generic :std/net/httpd :std/net/uri)
 
 (defclass request-context
   (request reply return response))
+
+(def (request-context-method request-context)
+  (http-request-method (request-context-request request-context)))
+
+(def (request-context-url request-context)
+  (http-request-url (request-context-request request-context)))
+
+(def (request-context-path request-context)
+  (http-request-path (request-context-request request-context)))
+
+(def (request-context-get-parameters request-context)
+  "=> list"
+  (let (params (http-request-params (request-context-request request-context)))
+    (if params 
+      (form-url-decode params)
+      (list))))
+
+(def (request-context-parameters request-context)
+  "=> list"
+  (request-context-get-parameters request-context))
+
+(def (request-context-protocol request-context)
+  (http-request-proto (request-context-request request-context)))
+
+(def (request-context-body request-context)
+  (http-request-body (request-context-request request-context)))
+
+;; headers
+
+(def (request-context-request-headers request-context)
+  (http-request-headers (request-context-request request-context)))
+
+
 
 (def (request-context-respond request-context value
 			      status-code: (sc #f)
@@ -55,4 +88,25 @@
 (def (content-type*-set! content-type)
   (reply-content-type-set!
    (request-context-reply (current-request-context))
-   content-type))
+   content-type))       
+
+(def (method* (request-context (current-request-context)))
+  (request-context-method request-context))
+
+(def (url* (request-context (current-request-context)))
+  (request-context-url request-context))
+
+(def (path* (request-context (current-request-context)))
+  (request-context-path request-context))
+
+(def (get-parameters* (request-context (current-request-context)))
+  (request-context-get-parameters request-context))
+
+(def (parameters* (request-context (current-request-context)))
+  (request-context-parameters request-context))
+
+(def (request-headers* (request-context (current-request-context)))
+  (request-context-request-headers request-context))
+
+(def (body* (request-context (current-request-context)))
+  (request-context-body request-context))

@@ -9,12 +9,6 @@ we are formulating a *reply* to the *request*, and it ends with and
 issue of a *response*. For convenience sake, there is also a *return*
 function.
 
-#+NAME: request-context-class
-#+BEGIN_SRC scheme
-  (defclass request-context
-    (request reply return response))
-#+END_SRC
-
 * Usage
 
 The *request-context* is what allows us to write functions to handle
@@ -28,7 +22,6 @@ requests without having to bother passing the details.
 	:ftw/server/reply
 	(only-in :gerbil/gambit/exceptions display-exception)
 	:std/net/httpd :std/sugar :std/generic :std/net/request)
-
 #+END_SRC
 
 We'll simply declare a hash to hold the handlers for urls, and call
@@ -204,6 +197,44 @@ Be default, a string returned from a handler is sent as html.
 
 * Implementation
 
+#+NAME: request-context-class
+#+BEGIN_SRC scheme
+  (defclass request-context
+    (request reply return response))
+
+  (def (request-context-method request-context)
+    (http-request-method (request-context-request request-context)))
+
+  (def (request-context-url request-context)
+    (http-request-url (request-context-request request-context)))
+
+  (def (request-context-path request-context)
+    (http-request-path (request-context-request request-context)))
+
+  (def (request-context-get-parameters request-context)
+    "=> list"
+    (let (params (http-request-params (request-context-request request-context)))
+      (if params 
+	(form-url-decode params)
+	(list))))
+
+  (def (request-context-parameters request-context)
+    "=> list"
+    (request-context-get-parameters request-context))
+
+  (def (request-context-protocol request-context)
+    (http-request-proto (request-context-request request-context)))
+
+  (def (request-context-body request-context)
+    (http-request-body (request-context-request request-context)))
+
+  ;; headers
+
+  (def (request-context-request-headers request-context)
+    (http-request-headers (request-context-request request-context)))
+#+END_SRC
+
+
 ** Respond
 
  In the end, all we want to do is respond to a request. To respond,
@@ -228,7 +259,7 @@ Be default, a string returned from a handler is sent as html.
 	value)))
  #+END_SRC
 
-*** Current and Dynamic Request Context
+*** ~call-with-request-context~, Dynamic Request Context
 
  Using the *request* and *respose* passed from the *httpd*, A
  *request-context* is created and dynamically bound.
@@ -305,23 +336,93 @@ Be default, a string returned from a handler is sent as html.
       content-type))       
  #+END_SRC
 
+*** ~method*~
+
+#+NAME: method*
+#+BEGIN_SRC scheme
+  (def (method* (request-context (current-request-context)))
+    (request-context-method request-context))
+#+END_SRC
+
+*** ~url*~
+
+#+NAME: url*
+#+BEGIN_SRC scheme
+  (def (url* (request-context (current-request-context)))
+    (request-context-url request-context))
+#+END_SRC
+
+*** ~path*~
+
+#+NAME: path*
+#+BEGIN_SRC scheme
+  (def (path* (request-context (current-request-context)))
+    (request-context-path request-context))
+#+END_SRC
+
+*** ~parameters*~
+
+#+NAME: parameters*
+#+BEGIN_SRC scheme
+  (def (get-parameters* (request-context (current-request-context)))
+    (request-context-get-parameters request-context))
+
+  (def (parameters* (request-context (current-request-context)))
+    (request-context-parameters request-context))
+#+END_SRC
+
+
+
+*** ~request-headers*~
+
+#+NAME: request-headers*
+#+BEGIN_SRC scheme
+  (def (request-headers* (request-context (current-request-context)))
+    (request-context-request-headers request-context))
+#+END_SRC
+
+
+
+
+*** ~body*~
+
+#+NAME: body*
+#+BEGIN_SRC scheme
+  (def (body* (request-context (current-request-context)))
+    (request-context-body request-context))
+#+END_SRC
+
+
+
 
 * /file/ request-context
 
 #+BEGIN_SRC scheme :tangle "../../gerbil/server/request-context.ss" :noweb yes
-;; -*- Gerbil -*-
-(export #t)
-(import :ftw/server/reply :std/generic :std/net/httpd)
+  ;; -*- Gerbil -*-
+  (export #t)
+  (import :ftw/server/reply :std/generic :std/net/httpd :std/net/uri)
 
-<<request-context-class>>
+  <<request-context-class>>
 
-<<request-context-respond>>
+  <<request-context-respond>>
 
-<<call-with-request-context>>
+  <<call-with-request-context>>
 
-<<respond*-and-abort*>>
+  <<respond*-and-abort*>>
 
-<<content-type*>>
+  <<content-type*>>
+
+  <<method*>>
+
+  <<url*>>
+
+  <<path*>>
+
+  <<parameters*>>
+
+  <<request-headers*>>
+
+  <<body*>>
 #+END_SRC
 
 
