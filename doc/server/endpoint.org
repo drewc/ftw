@@ -1,0 +1,644 @@
+#+TITLE: Endpoints
+
+We need to somehow match a URL to an action we wish to perform on its
+behalf. There could also be pieces of it that we want as
+variables. Thus, ~endpoint-dispatcher~ came to be.
+
+* Description
+
+So, what is an endpoint? It is, very simply, a ~name~ and a ~match~
+and a function.
+
+#+NAME: defclass-endpoint
+#+BEGIN_SRC scheme
+  (defclass endpoint
+    (name match function))
+#+END_SRC
+
+The name is a symbol, and the match is either a string or a
+function. When the match is scanned and matches, the function is
+called with the METHOD and the args return by a matching scan.
+
+
+* Usage 
+
+The entire idea behind enpoints is simple use. First, we'll simply
+view what is in the request context.
+
+#+BEGIN_SRC scheme
+  (define-endpoint request-context "^/request-context$")
+#+END_SRC
+
+We want it to be simple, so we'll define one fuction to do it all.
+
+#+BEGIN_SRC scheme
+  (import :std/net/uri)
+
+  (def (view-request-context)
+    (format "<h1> Request Context! </h1>
+
+    <dl> 
+     <dt> url* </dt> <dd> ~A </dd>
+     <dt> method* </dt> <dd> ~A </dd>
+     <dt> path* </dt> <dd> ~A </dd>
+     <dt> parameters* </dt> <dd> ~s </dd>
+     <dt> request-headers* </dt> <dd> ~s </dd>
+     <dt> body* </dt> <dd> ~A </dd>
+    </dl>
+
+  <h2> \"application/x-www-form-urlencoded\" method=\"post\" </h2>
+
+  <form enctype=\"application/x-www-form-urlencoded\" method=\"post\">
+    First name : <input type=\"text\" name=\"firstname\" /> <br />
+    Surname &nbsp; : <input type=\"text\" name=\"surname\" /><br />
+    <input name=\"myFile\" type=\"file\">
+    <textarea name=\"thetextarea\"> foo </textarea>
+    <input type=\"reset\" value=\"Clear form\" />
+    <input type=\"submit\" value=\"Submit now\" />
+  </form>
+
+
+  <h2> multipart/form-data; *boundary=(.+)$' </h2>
+
+  <form enctype=\"multipart/form-data\" method=\"post\">
+	  First name: <input type=\"text\" name=\"firstname\" /> <br />
+	  Surname: <input type=\"text\" name=\"surname\" /><br />
+	  thetextarea: <textarea name=\"thetextarea\"> foo </textarea>
+	  myFile <input name=\"myFile\" type=\"file\">
+	  <input type=\"reset\" value=\"Clear form\" />
+	  <input type=\"submit\" value=\"Submit now\" />
+  </form>
+
+
+  <form enctype=\"multipart/form-data\" method=\"post\">
+
+  <input name=\"myFile\" type=\"file\">
+
+	  <input type=\"submit\" value=\"Submit now\" />
+  </form>
+
+  "
+	    (url*)
+	    (method*)
+	    (path*)
+	    (parameters*)
+	    (request-headers*)
+	    (body*)))
+
+  (def (request-context/get)
+    (view-request-context))
+
+  (def (request-context/post)
+    (view-request-context))
+#+END_SRC
+
+
+make an endpoint for math.
+
+#+BEGIN_SRC scheme
+  (define-endpoint math "^/math/([+-]?[0-9]\\d*|0)$")
+
+  (def (math/get number)
+    (set! number (string->number number))
+
+    (format "<h1>~A</h1>
+
+  <form method=\"POST\">
+  <input type=\"text\ name=\"foo\">
+  </form>" number))
+
+
+
+
+  
+#+END_SRC
+
+#+NAME: return-status-code
+#+BEGIN_SRC scheme
+  (def (return-status-code (code +http-ok+) (message #f))
+     (respond*
+      (or message (http-status-code-message code))
+      status-code: code
+      content-type: "text/plain; charset=us-ascii"))
+#+END_SRC
+
+#+BEGIN_SRC scheme
+  (import :ftw/server/endpoint
+	  :ftw/server/request-context 
+	  :ftw/server
+	  :ftw/http-status-code
+	  :ftw/rfc/7578
+	  :std/net/httpd
+	  :std/pregexp
+	  :std/generic
+	  :std/format
+	  :std/sugar
+	  :gerbil/gambit/bytes 
+
+	  (only-in :gerbil/gambit/exceptions display-exception))
+
+  (defclass (test-endpoint-server ftw-server)())
+  (def foo #f)
+
+  (def (endpoint-handler request-context)
+    (try
+     (let loop ((eps (cdr *endpoints*)))
+       (if (null? eps)
+	 (return-status-code +http-not-found+
+			     (format "Not found: ~A~%~A"
+				     (request-context-path request-context)
+				     (request-context-parameters request-context)))
+	 (let* ((ep (car eps))
+		(args (endpoint-scan ep (request-context-path request-context))))
+	   (if args
+	     ((endpoint-function ep)
+	      (request-context-method request-context)
+	      args)
+	     (loop (cdr eps))))))
+     (catch (e)
+       (respond* (with-output-to-string
+		       "Error: " (cut display-exception e))
+		     content-type: "text/plain; charset=us-ascii"
+		     status-code: +http-internal-server-error+))))
+
+
+  (defmethod (ftw-server-handler (server test-endpoint-server))
+    (lambda (req res)
+      (call-with-request-context
+       endpoint-handler
+       request: req response: res)))
+
+  (def server (make-test-endpoint-server address: "localhost:8042"))
+
+  (start-ftw-server! server)
+
+  ;;  (stop-ftw-server! server)
+#+END_SRC
+
+
+
+
+* Implementation
+
+** Handler 
+
+#+NAME: endpoint-handler
+#+BEGIN_SRC scheme
+  (def (endpoint-handler request-context using: (endpoints *endpoints*))
+      (try
+       (let loop ((eps (cdr endpoints)))
+	 (if (null? eps)
+	   (return-status-code +http-not-found+
+			       (format "Not found: ~A~%~A"
+				       (request-context-path request-context)
+				       (request-context-parameters request-context)))
+	   (let* ((ep (car eps))
+		  (args (endpoint-scan ep (request-context-path request-context))))
+	     (if args
+	       ((endpoint-function ep)
+		(request-context-method request-context)
+		args)
+	       (loop (cdr eps))))))
+       (catch (e)
+	 (respond* (with-output-to-string
+			 "Error: " (cut display-exception e))
+		       content-type: "text/plain; charset=us-ascii"
+		       status-code: +http-internal-server-error+))))
+
+#+END_SRC
+
+** Scan for a match.
+
+ As stated, a match is either a string or a or a function. That's
+ somewhat a fib, as it could be a list as well, as returned by
+ ~pregex~.
+ 
+ #+NAME: endpoint-scan
+ #+BEGIN_SRC scheme 
+   (def (endpoint-scan endpoint string)
+     "=> list-of-submatches or #f
+
+   Returns a list of submatches if the scanner matches the string. The
+   list could be '().
+
+   Returns #f if there is no match"
+     (let (match (endpoint-match endpoint))
+       (if (or (string? match)
+	       (pair? match))
+	 (let (r (pregexp-match match string))
+	   (if r (cdr r) r))
+	 (match string))))
+ #+END_SRC
+
+*** Example
+
+ #+BEGIN_SRC scheme
+   (def etest (make-endpoint name: 'etest match: "e/(.*)/(.*)/test"))
+
+   (endpoint-scan etest "asd/123/test") ;; => #f
+
+   (endpoint-scan etest "e/123/456/test") ;; => ("123" "456")
+ #+END_SRC
+
+
+
+** Endpoint Function
+
+ If the ~endpoint-scan~ returns a list, that means that there's a
+ function to call.
+
+ The function name is defined with the ~endpoint-name~, a "/", and the
+ HTTP method name. So, a GET request matched by the endpointed named
+ ~foo~ would call ~foo/get~.
+
+
+*** Request Methods and a case for them.
+
+  There are only so many methods. 
+
+ #+NAME: http-request-methods
+ #+BEGIN_SRC scheme
+ (def http-request-methods
+     '(GET POST PUT DELETE CONNECT OPTIONS TRACE PATCH))
+ #+END_SRC
+
+ They can all be used to make a ~case~ statement that works to call the
+ correct function. 
+
+ First, the correct function name for this method.
+
+ #+NAME: name-to-fn-name
+ #+BEGIN_SRC scheme
+   (def (name->fn-name method)
+	 (string->symbol
+	  (format
+	   "~A/~A" name
+	   (string-map char-downcase (symbol->string method)))))
+ #+END_SRC
+
+ It works.
+
+ #+BEGIN_SRC scheme
+   (def name 'this-is-an-endpoint)
+
+   (name->fn-name 'GET) ;;=> this-is-an-endpoint/get
+ #+END_SRC
+
+
+ Now, the ~case~ /clause/ for this method.
+
+ #+NAME: case-clause
+ #+BEGIN_SRC scheme
+   (def (clause method)
+     `((,method) (apply ,(name->fn-name method) args)))
+ #+END_SRC
+
+ #+BEGIN_SRC scheme
+  (clause 'POST) ;;=> ((POST) (apply this-is-an-endpoint/post args))
+#+END_SRC
+
+That all comes together to create a form which, when compiled, does
+what we want.
+
+# :tangle "/tmp/method-case-form.ss"
+#+NAME: method-case-form
+#+BEGIN_SRC scheme :noweb yes 
+  (def (method-case-form name)
+
+    <<name-to-fn-name>>
+
+    <<case-clause>>
+
+    `(case method
+    ,@(append
+       (map clause http-request-methods)
+       '((else (error "this:" method " is not an http request method"))))))
+#+END_SRC
+
+#+BEGIN_SRC scheme
+  (method-case-form name)
+  ;; =>
+  ;; (case (string->symbol method)
+  ;;   ((GET) (apply this-is-an-endpoint/get	args))
+  ;;   ((POST) (apply this-is-an-endpoint/post args))
+  ;;   ((PUT) (apply this-is-an-endpoint/put args))
+  ;;   ((DELETE) (apply this-is-an-endpoint/delete args))
+  ;;   ((CONNECT) (apply this-is-an-endpoint/connect args))
+  ;;   ((OPTIONS) (apply this-is-an-endpoint/options args))
+  ;;   ((TRACE) (apply this-is-an-endpoint/trace args))
+  ;;   ((PATCH) (apply this-is-an-endpoint/patch args))
+  ;;   (else (error "this: " method "is not an http request method")))
+#+END_SRC
+
+***  /syntax/ ~construct-endpoint-function~
+
+One may note that it is a form which relies on variables. It is
+unhygenic. Gerbil allows such wonderful things.
+
+#+NAME: construct-endpoint-fuction-syntax-case
+#+BEGIN_SRC scheme
+(syntax-case stx ()
+    ((macro name)
+     (with-syntax ((body (method-case-form (syntax-e #'name))))
+       #'(lambda (method args) body))))
+#+END_SRC
+
+Putting it together, we get ~construct-endpoint-function~.
+
+# :tangle "/tmp/construct-endpoint-function.ss"
+#+NAME: construct-endpoint-function
+#+BEGIN_SRC scheme :noweb yes 
+  (defsyntax (construct-endpoint-function stx)
+
+    <<http-request-methods>>
+
+    <<method-case-form>>
+
+    <<construct-endpoint-fuction-syntax-case>>)
+#+END_SRC
+
+
+**** Example
+
+Without anything else, it fails all the time.
+
+#+BEGIN_SRC scheme
+  ((construct-endpoint-function this-is-an-endpoint) "GET" (list 'arg 1234))
+  ;; Evaluation aborted on Unbound variable: this-is-an-endpoint/get
+#+END_SRC
+
+It will always fail when passed a non-http-method.
+
+#+BEGIN_SRC scheme
+((construct-endpoint-function this-is-an-endpoint) "FSCK" (list 'arg 1234))
+; Evaluation aborted on this: "FSCK" " is not an http request method"
+#+END_SRC
+
+If we define the function, it will be ~apply~'d with the second
+argument, so that also needs to be correct.
+
+#+BEGIN_SRC scheme
+  (def (this-is-an-endpoint/get)
+    #t)
+
+  ((construct-endpoint-function this-is-an-endpoint) "GET" (list 'arg 1234))
+  ;; Evaluation aborted on Wrong number of arguments passed to procedure
+  ;; (this-is-an-endpoint/get 'arg 1234)
+#+END_SRC
+
+When it is correct, it is a wonderful thing to see. First, define some
+functions it will call.
+
+#+BEGIN_SRC scheme
+  (def (this-is-an-endpoint/get say length)
+    (format "~A, only ~A knots, give or take ~A!"
+	    say length (random-integer length)))
+
+  (def current 0)
+  (def (this-is-an-endpoint/post knots)
+    (begin0
+	(if (> knots current)
+	  "Reef the mains'l, she's blowing hard!"
+	  "She's slowing down, time for grog and a nap.")
+      (set! current knots)))
+
+  (def (this-is-an-endpoint/delete)
+    "Say hi to Davey Jones")
+
+#+END_SRC
+
+Then call them.
+
+#+BEGIN_SRC scheme
+  (def ef (construct-endpoint-function this-is-an-endpoint))
+
+  (ef "GET" (list 'arg 1234))
+
+  ;; => "arg, only 1234 knots, give or take 238"
+
+  (ef "POST" '(15))
+
+  ;; => "Reef the mains'l, she's blowing hard!"
+
+  (ef "POST" '(10))
+
+  ;; => "She's slowing down, time for grog and a nap."
+
+  (ef "DELETE" '())
+
+  ;; => "Say hi to Davey Jones"
+#+END_SRC
+
+
+** /syntax/ ~construct-endpoint~
+
+#+NAME: construct-endpoint
+#+BEGIN_SRC scheme
+  (defrules construct-endpoint ()
+    ((_ name match)
+     (make-endpoint 
+      name: (quote name)
+      match: match
+      function: (construct-endpoint-function name))))
+#+END_SRC
+
+
+*** Example
+
+This example is almost what ~define-endpoints~ is all about.
+
+The endpoint itself is simple. 
+
+#+BEGIN_SRC scheme
+  (def (pirate/get say length)
+    (let (length (string->number length))
+      (format "~A, only ~A knots, give or take ~A!"
+	      say length (random-integer length))))
+
+  (def (pirate/post say chips)
+    (let (chips (string->number chips))
+      (let ((stack (random-integer (* 4 chips))))
+	(cond
+	 ((> (/ stack 2) chips)
+	  (format "~A, raise ya another ~A"
+		  say chips))
+	 ((> stack chips)
+	  (format "~A, call." say))
+	 (else
+	  (format "Fold ~A :(" say))))))
+#+END_SRC
+
+Using that, we'll make a mooring for the pirates.
+
+#+BEGIN_SRC scheme
+  (def pirate-path "/pirate/(.*)/(.*)")
+#+END_SRC
+
+We can now construct an endpoint that embraces our pirates.
+
+#+BEGIN_SRC scheme
+  (def pirate::endpoint
+    (construct-endpoint
+     pirate pirate-path))
+#+END_SRC
+
+Testing it out does what is expected. No plank for you. Yet.
+
+#+BEGIN_SRC scheme
+  (let* ((test-run-url "/pirate/yarrrr!/25")
+	 (test-fail-url "/fail")
+	 (scan (cut endpoint-scan pirate::endpoint <>))
+	 (run-args (scan test-run-url))
+	 (fail (scan test-fail-url))
+	 (run (endpoint-function pirate::endpoint)))
+
+    (list run-args: run-args
+	  fail: fail
+	  get: (run "GET" run-args)
+	  posts: (list (run "POST" run-args)
+		       (run "POST" run-args)
+		       (run "POST" run-args)
+		       (run "POST" run-args)
+		       (run "POST" run-args))))
+
+  ;; =>
+   ;; ( run-args: ("yarrrr!" "25")
+   ;;   fail: #f
+   ;;   get: "yarrrr!, only 25 knots, give or take 17!"
+   ;;   posts: ("yarrrr!, call." "yarrrr!, raise ya another 25"
+   ;; 	   "Fold yarrrr! :(" "yarrrr!, call." "Fold yarrrr! :("))
+
+#+END_SRC
+
+
+* ~define-endpoint~, the end-all-be-all.
+
+To make endpoints dispatch an user friendly, the (re)definition will
+entail a number of tasks. 
+
+  1) For an endpoint named ~name~, the toplevel variable holding it
+     will be ~name::endpoint~.
+     
+     #+BEGIN_SRC scheme
+     (string->symbol (format "~A::endpoint" name))
+     #+END_SRC
+
+  2) The endpoint may be in use, we we'll make sure that redefining it
+     modifies the existing one.
+     
+     We use a ~try/catch~.
+
+     #+BEGIN_SRC scheme 
+       (try
+	(let (e name::endpoint)
+	   ...)
+	(catch  (e) (construct-endpoint name "foo")))
+     #+END_SRC
+     
+
+  3) By default, defining an endpoint will add it to an ~*endpoint*~
+     list. The list itself can be set by ~in:~.
+
+     Only the ~cdr~ is used! by the definition.
+
+     #+BEGIN_SRC scheme
+       (def *endpoints* (list 'endpoints))
+     #+END_SRC
+
+
+Make it so.
+
+#+NAME: define-endpoint
+#+BEGIN_SRC scheme
+  (def *endpoints* (list 'endpoints))
+
+  (defsyntax (define-endpoint stx)
+
+    (def (%defvar name match in)
+      (let ((e (gensym))
+	    (i (gensym))
+	    (c (gensym))
+	    (varname (string->symbol (format "~A::endpoint"
+					     name))))
+	`(define ,varname
+	   (let ((,e
+		  (with-catch
+		   (lambda (_)
+		     (construct-endpoint ,name ,match))
+		   (lambda ()
+		     (let ((,e ,varname))
+		       (set! (endpoint-match ,e) ,match)
+		       ,e))))
+		 (,i ,in))
+	     (unless (memq ,e ,i)
+	       (set! (cdr ,i)
+		 (cons ,e (cdr ,i))))
+	     ,e))))
+
+
+    (syntax-case stx ()
+      ((macro name match in: endpoints)
+       (with-syntax ((var (datum->syntax #'macro
+			    (%defvar (syntax-e #'name)
+				     (syntax-e #'match)
+				     (syntax-e #'endpoints)))))
+	 #'var))
+      ((macro name match)
+       (with-syntax ((var (datum->syntax #'macro
+			    (%defvar (syntax-e #'name)
+				     (syntax-e #'match)
+				     '*endpoints*))))
+	 #'var))))
+
+
+#+END_SRC
+
+
+* ~delete-endpoint~, the end-of-be-all
+
+
+#+BEGIN_SRC scheme
+
+  (def (delete-endpoint endpoint-or-name in: (in *endpoints*))
+    (let ((endpoint (if (endpoint? endpoint-or-name)
+		      endpoint-or-name
+		      (eval (string->symbol
+			     (format "~A::endpoint"
+				     endpoint-or-name))))))
+    (set! (cdr *endpoints*) (delete endpoint (cdr *endpoints*)))))
+
+#+END_SRC
+
+* /file/ endpoint.ss
+
+#+BEGIN_SRC scheme :noweb yes :tangle "../../gerbil/server/endpoint.ss"
+  ;; -*- Gerbil -*-
+  ;;(export define-endpoint delete-endpoint *endpoints*)
+  (export #t)
+  (import :ftw/server/request-context :ftw/server
+	  :ftw/http-status-code
+	  :std/net/httpd
+	  :std/pregexp
+	  (phi: +1
+		:std/srfi/13
+		:std/format)
+	  :std/sugar
+	  :std/generic
+	  :std/format
+	  :std/srfi/1
+          (only-in :gerbil/gambit/exceptions display-exception)) 
+
+  <<defclass-endpoint>>
+
+  <<endpoint-scan>>
+
+  <<construct-endpoint-function>>
+
+  <<construct-endpoint>>
+
+  <<define-endpoint>>
+
+  <<endpoint-handler>> 
+
+  <<return-status-code>>
+#+END_SRC
