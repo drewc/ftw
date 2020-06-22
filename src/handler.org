@@ -1,0 +1,75 @@
+#+TITLE: Parhameters? Haramelers? Parhandler.
+
+One of the big things for ~FTW~ is short-hand, yet avoid syntax creation.
+Dynamically bound ~http-request~ and ~http-response~ to the rescue.
+
+#+begin_src gerbil :noweb-ref parhandler
+  (def current-http-request (make-parameter #f)) 
+  (def current-http-response (make-parameter #f))
+#+end_src
+
+Of course, we make things a little shorter and sweeter even for ~parameterize~
+as that goes right along with the point. 
+
+#+begin_src gerbil :noweb-ref parhandler
+  (defrules ftw-handler () 
+    ((_ body ...)
+     (lambda (req res)
+       (parameterize ((current-http-request req) (current-http-response res))
+         body ...))))
+#+end_src
+
+And the postfix of ~*~ for all the ~:std/net/httpd/handler~ functions that
+related to request and response.
+
+#+begin_src gerbil :noweb-ref parhandler
+  (def (http-request-method* . args)
+    (apply http-request-method (current-http-request) args))
+  (def (http-request-url* . args)
+    (apply http-request-url (current-http-request) args)) 
+  (def (http-request-path* . args)
+    (apply http-request-path (current-http-request) args))
+  (def (http-request-params* . args)
+    (apply http-request-params (current-http-request) args))
+  (def (http-request-proto* . args)
+    (apply http-request-proto (current-http-request) args))
+  (def (http-request-client* . args)
+    (apply http-request-client (current-http-request) args))
+  (def (http-request-headers* . args)
+    (apply http-request-headers (current-http-request) args))
+  (def (http-request-body* . args)
+    (apply http-request-body (current-http-request) args))
+  (def (http-request-timeout*-set! . args)
+    (apply http-request-timeout-set! (current-http-request) args))
+  (def (http-response-write* . args)
+    (apply http-response-write (current-http-response) args))
+  (def (http-response-begin* . args)
+    (apply http-response-begin (current-http-response) args))
+  (def (http-response-chunk* . args)
+    (apply http-response-chunk (current-http-response) args))
+  (def (http-response-end* . args)
+    (apply http-response-end (current-http-response) args))
+  (def (http-response-force-output* . args)
+    (apply http-response-force-output (current-http-response) args))
+  (def (http-response-timeout*-set! . args)
+    (apply http-response-timeout-set! (current-http-response) args))
+
+#+end_src
+
+* /File/ handler.ss
+
+Also import/export ~:std/net/httpd/handler~. 
+
+#+begin_src gerbil :noweb yes :tangle handler.ss :comments noweb :shebang ";;; -*- Gerbil -*-"
+  ;;; -*- Gerbil -*-
+  ;;; (C) me at drewc.ca
+
+  ;; This file is literately tangled from handler.org. 
+
+  (import :std/net/httpd/handler)
+  (export #t (import: :std/net/httpd/handler))
+
+  <<parhandler>>
+#+end_src
+
+

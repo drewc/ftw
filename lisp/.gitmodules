@@ -1,3 +1,0 @@
-[submodule "lib/lisp-interface-library"]
-	path = lib/lisp-interface-library
-	url = git@github.com:drewc/lisp-interface-library.git

@@ -1,0 +1,218 @@
+#    -*- mode: org -*-
+
+
+Archived entries from file /home/user/src/ftw/src/httpd/endpoint.org
+
+
+* endpoint.ss
+  :PROPERTIES:
+  :ARCHIVE_TIME: 2019-12-27 Fri 11:26
+  :ARCHIVE_FILE: ~/src/ftw/src/httpd/endpoint.org
+  :ARCHIVE_OLPATH: Files
+  :ARCHIVE_CATEGORY: endpoint
+  :END:
+
+#+begin_src gerbil
+(import  :drewc/ftw/endpoint/struct 
+           :drewc/ftw/endpoint/mux
+           :std/format :std/test 
+           :std/net/httpd)
+  (export define-endpoint add-endpoint! 
+          current-http-mux current-http-request current-http-response)
+
+  (def current-http-mux
+    (make-parameter (make-endpoint-http-mux)))
+
+  (def (add-endpoint! endpoint to: (to (current-http-mux)))
+    (add-endpoint-to-http-mux! to endpoint))
+
+  (defrules define-endpoint ()
+    ((_ name match)
+     (add-endpoint! (make-endpoint 'name match)))
+    ((_ name match args ... )
+     (add-endpoint! (make-endpoint 'name match args ...)))
+    ((_ name match mux: mux args ... )
+     (add-endpoint! (make-endpoint 'name match args ...)
+                    to: mux)))
+#+end_src
+
+
+Archived entries from file /home/user/src/ftw/src/httpd/endpoint.org
+
+
+* endpoint/mux.ss 
+  :PROPERTIES:
+  :ARCHIVE_TIME: 2019-12-27 Fri 11:26
+  :ARCHIVE_FILE: ~/src/ftw/src/httpd/endpoint.org
+  :ARCHIVE_OLPATH: Files
+  :ARCHIVE_CATEGORY: endpoint
+  :END:
+ ##:tangle "endpoint/mux.ss"
+#+begin_src gerbil
+  (import :drewc/ftw/endpoint/struct 
+          :std/net/httpd/mux :std/net/httpd :std/misc/sync
+          :std/sugar :std/srfi/95 :std/iter :std/format
+          :gerbil/gambit/exceptions :gerbil/expander)
+  (export #t)
+
+
+
+  (def (endpoint-hash endpoint)
+    (string->symbol (string-append
+                     (symbol->string
+                      (expander-context-id (endpoint-context endpoint)))
+                     "::"
+                     (with-output-to-string
+                       (cut display (endpoint-name endpoint))))))
+
+  (def (make-endpoint-http-mux-queue mux)
+    (let (q (sync-hash-do (endpoint-http-mux-endpoints mux)
+                          (lambda (t) (for/collect ((values k v) (in-hash t)) v))))
+      (map make-endpoint-dispatch-function (sort q < endpoint-priority))))
+
+  (def (add-endpoint-to-http-mux! mux endpoint)
+    (let (hash (endpoint-hash endpoint))
+      (begin0 hash (sync-hash-put! (endpoint-http-mux-endpoints mux)
+                    hash 
+                    endpoint)
+              (set! (endpoint-http-mux-queue mux) (make-endpoint-http-mux-queue mux)))))
+
+
+
+  (def (endpoint-http-mux-request-handler mux)
+    (lambda (req res)
+      (parameterize ((current-http-request req)
+                     (current-http-response res))
+        (try 
+         (let handle-request ((q (endpoint-http-mux-queue mux)))
+           (if (null? q)
+             (error "Cannot find handler for " (http-request-path req))
+             (let (dispatched? ((car q) req))
+               (or dispatched? (handle-request (cdr q))))))
+        (catch (e)
+          (http-response-write
+           res 500 '() (format "Endpoint Error: ~A"
+                           (with-output-to-string (cut display-exception e)))))))))
+
+  (defmethod {get-handler endpoint-http-mux}
+    (lambda (mux . _) (endpoint-http-mux-request-handler mux)))
+
+  (defmethod {put-handler! endpoint-http-mux}
+    (lambda (mux host path handler)
+      (if (procedure? handler)
+        (add-endpoint-to-http-mux!
+         mux (make-endpoint (string->symbol path) path
+                            function: (lambda ()
+                                        (handler (current-http-request)
+                                                 (current-http-response)))
+                            parameters: '()
+                            predicate: (lambda (req) (eqv? path
+                                                      (http-request-path (current-http-request))))))
+        (add-endpoint-to-http-mux! mux handler))))
+
+
+#+end_src
+
+Archived entries from file /home/user/src/ftw/src/httpd/endpoint.org
+
+
+* Old queue
+  :PROPERTIES:
+  :ARCHIVE_TIME: 2020-01-02 Thu 13:39
+  :ARCHIVE_FILE: ~/src/ftw/src/httpd/endpoint.org
+  :ARCHIVE_OLPATH: Endpoint Queue/Testing
+  :ARCHIVE_CATEGORY: endpoint
+  :END:
+#+begin_src gerbil :tangle "endpoint/queue.ss" :noweb yes
+  (import :std/srfi/1 :std/srfi/95 :std/iter :drewc/ftw/httpd/endpoint/struct)
+  (export #t)
+
+  <<endpoint-q-code>>
+
+  (def (find-queued ep q)
+    (let/cc yup!
+      (begin0 #f
+        (for ((values k v) (in-hash (endpoint-queue-table q)))
+          (when (and (eq? (endpoint-name (queued-endpoint-endpoint k))
+                          (endpoint-name ep))
+                     (eq? (queued-endpoint-context k)
+                          (gx#current-expander-context)))
+            (yup! k))))))
+
+
+  (def (remove-endpoint-from-queue! e q)
+    (let (e? (find-queued e q))
+      (when e?
+        (for (kv (endpoint-queue-alist q))
+          (if (member e? (cdr kv)) (set! (cdr kv) (remove (cut eq? e? <>) (cdr kv)))))
+        (hash-remove! (endpoint-queue-table q) e?)
+        (sort-endpoint-queue! q))))
+
+  (def (add-endpoint-hit-to-queue! e q)
+    (def qe (if (endpoint? e) (find-queued e q) e))
+    (hash-update! (endpoint-queue-table q) qe 1+))
+
+  (def (endpoint-queue-endpoint-hits q ep)
+    (when (endpoint? ep) (set! ep (find-queued ep q)))
+    (if (not ep) 0
+        (hash-ref (endpoint-queue-table q) ep)))
+
+  (def (sort-endpoint-queue! q)
+    (sort! (endpoint-queue-alist q) < car)
+    (for ([k . vs] (endpoint-queue-alist q))
+      (sort! vs > (cut endpoint-queue-endpoint-hits q <>)))
+    (set! (endpoint-queue-queue q)
+      (append-map (cut match <>
+                       ([k . vs]
+                        (map (lambda (qep) (values (endpoint-dispatcher
+                                               (queued-endpoint-endpoint qep))
+                                              qep))
+                             vs)))
+                  (endpoint-queue-alist q))))
+
+  (def (endpoint-queue-endpoint-index q ep)
+    (def qe (if (endpoint? ep) (find-queued ep q) ep))
+    (list-index (cut eq? qe <>) (map (lambda (v) (let ((values _ e) v) e))
+                                     (endpoint-queue-queue q))))
+  (def (reset-endpoint-queue! q)
+    (let ((eqt (endpoint-queue-table q))
+          (neqt (make-hash-table-eq)))
+      (endpoint-queue-table-set! q neqt)
+      (for ((values k _) (in-hash eqt))
+        (hash-put! neqt k 0))))
+
+  (def (add-endpoint-to-queue! endpoint queue priority: (priority 42))
+    (def exists? (find-queued endpoint queue))
+    (if (not exists?)
+      (let ((qep (queued-endpoint endpoint (gx#current-expander-context)))
+            (pq? (assoc priority (endpoint-queue-alist queue))))
+        (hash-put! (endpoint-queue-table queue) qep 0)
+        (if pq? (set! (cdr pq?) (cons qep (cdr pq?)))
+              (set! (endpoint-queue-alist queue)
+                (cons (cons priority (list qep)) (endpoint-queue-alist queue))))
+        (sort-endpoint-queue! queue))
+      (begin (remove-endpoint-from-queue! endpoint queue)
+             (add-endpoint-to-queue! endpoint queue priority: priority))))
+
+  (def (endpoint-queue-dispatcher q)
+    (def queue (endpoint-queue-queue q))
+    (lambda (req res)
+      (let lp ((qu queue))
+        (if (null? qu) #f
+            (let* (((values dispatch? qep) (car qu))
+                   (d? (dispatch? req res)))
+              (if d?
+                (begin0 #t (add-endpoint-hit-to-queue! qep q))
+                (lp (cdr qu))))))))
+#+end_src
+
+#+begin_src gerbil
+  (defstruct queued-endpoint (endpoint context)) 
+#+end_src
+** Testing 
+    #+begin_src gerbil :noweb-ref test-endpoint-queue
+
+ #+end_src
+(
+
+ 

@@ -1,0 +1,10 @@
+CLAN: Common Lisp Archive Network(??)
+
+We use a tonne of CL-like utilites. Lispnicks FTW! 
+
+#+BEGIN_SRC sh
+git remote add clan-remote git@github.com:drewc/gerbil-utils.git
+git fetch clan-remote
+git checkout -b clan clan-remote/master
+git read-tree --prefix=gerbil/clan/ -u clan
+#+END_SRC

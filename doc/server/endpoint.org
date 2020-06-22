@@ -19,10 +19,9 @@ The name is a symbol, and the match is either a string or a
 function. When the match is scanned and matches, the function is
 called with the METHOD and the args return by a matching scan.
 
-
 * Usage 
 
-The entire idea behind enpoints is simple use. First, we'll simply
+The entire idea behind endpoints is simple use. First, we'll simply
 view what is in the request context.
 
 #+BEGIN_SRC scheme
@@ -549,7 +548,7 @@ entail a number of tasks.
 Make it so.
 
 #+NAME: define-endpoint
-#+BEGIN_SRC scheme
+#+BEGIN_SRC gerbil 
   (def *endpoints* (list 'endpoints))
 
   (defsyntax (define-endpoint stx)

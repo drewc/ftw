@@ -1,0 +1,93 @@
+#+TITLE: Cookies, mmmmm.
+
+"C is for Cookie, that's good enough for me!"
+ --[[https://www.youtube.com/watch?v%3DYe8mB6VsUHw][Cookie Monster]]
+
+"An HTTP cookie (web cookie, browser cookie) is a small piece of data
+that a server sends to the user's web browser. The browser may store
+it and send it back with the next request to the same server.
+Typically, it's used to tell if two requests came from the same
+browser — keeping a user logged-in, for example. It remembers stateful
+information for the stateless HTTP protocol."
+--https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies
+
+* Request Cookies
+
+  We get requests coming in that have cookies in a cookie jar. We'll transfer
+  them over to our own cookie that that's better suited to our tastes, AKA
+  alist.
+
+#+begin_src gerbil :tangle "../src/httpd/cookies.ss"
+  (import :drewc/ftw/httpd/handler :std/srfi/13)
+  (export #t)
+
+  (def (http-request-cookies req)
+    (let* ((hs (http-request-headers*))
+           (cj (assget "Cookie" hs))
+           (cookies
+            (and cj (map (lambda (c) (match (map string-trim (string-split c #\=))
+                                  ([a b] [a . b])))
+                         (string-split cj #\;)))))
+
+      (or cookies [])))
+
+  (def (http-request-cookies* (req #f))
+    (http-request-cookies (or req (current-http-request))))
+
+#+end_src
+
+
+* Set-Cookie Syntax 
+
+#+BEGIN_SRC html
+Set-Cookie: <cookie-name>=<cookie-value> 
+Set-Cookie: <cookie-name>=<cookie-value>; Expires=<date>
+Set-Cookie: <cookie-name>=<cookie-value>; Max-Age=<non-zero-digit>
+Set-Cookie: <cookie-name>=<cookie-value>; Domain=<domain-value>
+Set-Cookie: <cookie-name>=<cookie-value>; Path=<path-value>
+Set-Cookie: <cookie-name>=<cookie-value>; Secure
+Set-Cookie: <cookie-name>=<cookie-value>; HttpOnly
+
+Set-Cookie: <cookie-name>=<cookie-value>; SameSite=Strict
+Set-Cookie: <cookie-name>=<cookie-value>; SameSite=Lax
+
+// Multiple directives are also possible, for example:
+Set-Cookie: <cookie-name>=<cookie-value>; Domain=<domain-value>; Secure; HttpOnly
+#+END_SRC
+
+* The Cookie Class
+
+
+#+BEGIN_SRC scheme
+  (defclass cookie
+    (name value
+     expires max-age domain path
+     secure http-only samesite))    
+#+END_SRC
+
+* Cookie to String
+
+#+BEGIN_SRC scheme
+  (import :ftw/timestamp :clan/utils/base)
+
+  (def (cookie->string cookie)
+
+    (def (cookie-expires-date cookie)
+      (let (date (cookie-expires cookie))
+        (when date (rfc-1123-date<-date date))))
+
+    (def ?? (reader cookie format-string (value? #t))
+      (let (value (reader cookie))
+        (if value
+          (format format value)
+          (void))))
+    (string-append  
+     (cookie-name cookie)"="(cookie-value cookie)
+     (?? cookie-expires-date cookie "; Expires=~A")
+     (?? cookie-max-age cookie "; Max-Age=~A~")
+     (?? cookie-domain cookie "; Domain=~A~")
+     (cookie-path cookie)
+     (cookie-secure cookie)
+     (cookie-http-only cookie)))                              
+#+END_SRC
+

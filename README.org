@@ -19,14 +19,14 @@ See https://github.com/vyzo/gerbil.
 It is available as a ~gxpkg~ from *[[http://github.com/drewc/gerbil-ftw][github.com/drewc/gerbil-ftw]]*.
 
 #+BEGIN_SRC sh
-gxpkg install github.com/drewc/gerbil-ftw
+gxpkg install github.com/drewc/ftw
 #+END_SRC
 
-For HACKING purposes, *[[https://github.com/drewc/ftw][github.com/drewc/ftw]]* is used, with the
-~./gerbil~ directory being the one. There can be only one.
+Or, if you prefer to hack.
 
 #+BEGIN_SRC sh
-gxpkg link github.com/drewc/gerbil-ftw ~/src/ftw/gerbil
+gxpkg link github.com/drewc/ftw ~/src/ftw/gerbil
+gxpkg build github.com/drewc/ftw
 #+END_SRC
 
 * Common Lisp

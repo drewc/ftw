@@ -1,0 +1,6 @@
+
+#+BEGIN_SRC scheme
+  (add-load-path "~/src/ftw/gerbil/")
+#+END_SRC
+
+

@@ -1,0 +1,92 @@
+
+https://help.github.com/articles/about-git-subtree-merges/
+https://git-scm.com/book/en/v1/Git-Tools-Subtree-Merging
+
+Make the CL branch and a pointer to it from master
+
+
+https://medium.com/@porteneuve/mastering-git-subtrees-943d29a798ec
+
+* Update the gerbil branch from a master commit
+
+#+BEGIN_SRC sh
+git stash
+git checkout gerbil-ftw
+HASH=`git log -1 --format="%H" master`
+git cherry-pick --strategy=subtree $HASH
+git push gerbil-ftw HEAD:master
+git push gerbil-ftw gerbil-ftw
+git checkout master
+git stash pop
+#+END_SRC
+* Make the CL branch and a pointer to it from master
+
+#+BEGIN_SRC sh
+git checkout -b lisp
+git push -u origin lisp
+git checkout master
+
+git ls-files -z | xargs -0 git rm
+
+rm -rf *
+git read-tree --prefix=lisp/ -u lisp
+#+END_SRC
+
+* Use the fork to make gerbil/ftw
+
+#+BEGIN_SRC sh
+git remote add gerbil-ftw git@github.com:drewc/gerbil-ftw.git
+git fetch gerbil-ftw
+git checkout -b gerbil gerbil-ftw/master
+
+git checkout master
+
+git mv gerbil/test/ gerbil/ftw/
+git mv gerbil/ftw/test/ftw/* gerbil/ftw/test/
+
+git commit -m "Rename the gerbil test"
+
+git ls-files  gerbil/ftw/ -z| xargs -0 git rm
+
+#git commit --amend -m "rename the test / move the docs"
+
+git read-tree --prefix=gerbil/ftw/ -u gerbil
+
+git commit -m "added git@github.com:drewc/gerbil-ftw.git as subtree"
+
+ #+END_SRC
+
+
+
+* Make a gerbil fork
+
+
+
+** Make a forked repo
+
+#+BEGIN_SRC sh
+cd ~/src/
+git clone ~/src/ftw gerbil-ftw
+#+END_SRC
+
+** Add the github upstream
+
+#+BEGIN_SRC sh
+cd ~/src/gerbil-ftw
+git remote rename origin local
+git remote add origin git@github.com:drewc/gerbil-ftw.git
+#+END_SRC
+
+** Make it gerbil package friendly
+
+#+BEGIN_SRC sh
+git mv gerbil/ftw/* .
+git mv gerbil/test .
+cd test/
+git mv ftw/server/ .
+rmdir ftw/
+cd ..
+#+END_SRC
+
+
+

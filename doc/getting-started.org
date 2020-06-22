@@ -1,0 +1,56 @@
+#+TITLE: For The Web! Getting started.
+
+Since *For The Web!(FTW!)* has aspects of everything for the web,
+choosing an entry point in order to get started is either trivial, if
+you know what you want to do, or difficult, if you do not.
+
+As luck would have it, this document outlines it from all angles (or
+will do so when it, along with *FTW!*, has a wee bit more ), so the
+choice is yours.
+
+* A simple web page
+
+In all honestly, much of the work I personally do for the web is
+ultimately presented to the user as an HTML5 page.
+
+Therefore, given such, it is a decent place to get started.
+
+** Generating
+
+According to [[http://www.brucelawson.co.uk/2010/a-minimal-html5-document/][some google-fu]], the minimal HTML5 is as follows.
+
+#+BEGIN_SRC html
+  <!doctype html>
+  <html lang=en>
+  <head>
+  <meta charset=utf-8>
+  <title>blah</title>
+  </head>
+  <body>
+  <p>I'm the content</p>
+  </body>
+  </html>
+#+END_SRC
+
+Using that description, a function to generate is trivial.
+
+#+BEGIN_SRC scheme
+  (import :ftw/shtml5)
+
+  (def (html5-page title: (title "blah") body: (body '((p "I'm the content"))))
+    (shtml5-page->string
+     `(html
+       (@ (lang "en"))
+       (head (meta (@ (charset utf8)))
+	     (title ,title))
+       (body ,@(if (and (list? body)
+			(list? (car body)))
+		 body
+		 (list body))))))	  	 
+#+END_SRC
+
+** Displaying
+
+
+
+

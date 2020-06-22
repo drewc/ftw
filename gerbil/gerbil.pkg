@@ -1,3 +1,0 @@
-;; All in ftw package, relies on clan.
-(package: ftw
- depend: ("github.com/fare/gerbil-utils"))	  

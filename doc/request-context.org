@@ -1,0 +1,134 @@
+#+TITLE: FTW! Request Context
+
+Basically, the cycle of a webapp goes something like this.
+
+    : request -> process -> response
+
+It is the process stage in which our programming lays. In processing,
+we are formulating a *reply* to the *request*, and it ends with and
+issue of a *response*. For convenience sake, there is also a *return*
+function.
+
+#+NAME: request-context-class
+#+BEGIN_SRC scheme
+  (import :ftw/server/reply)
+
+  (defclass request-context
+    (request reply return response))
+#+END_SRC
+
+* Respond
+
+To respond, ~http-response-write~ is used.
+
+#+BEGIN_SRC scheme
+  (import :std/generic :std/net/httpd)
+
+  (def (request-context-respond request-context value
+				return-code: (c #f)
+				headers: (h #f))
+    (let (reply (request-context-reply request-context))
+      (http-response-write
+       (request-context-response request-context)
+       (or c (reply-return-code reply))
+       (or h (reply-headers reply))
+       value)))
+#+END_SRC
+
+** Current and Dynamic Request Context
+
+Using the *request* and *respose* passed from the *httpd*, A
+*request-context* is created and dynamically bound.
+
+In ~call-with-request-context~, dy default, we respond using the
+values from *reply*. We capture a continuation as well, where we can
+short-circuit the process.
+
+#+BEGIN_SRC scheme
+  (def current-request-context
+    (make-parameter #f))
+
+  (def (call-with-request-context function
+				  request: (request (void))
+				  reply: (reply (create-reply))
+				  response: (response (void)))
+    (let (request-context
+	  (make-request-context
+	   request: request
+	   reply: reply
+	   response: response))
+      (parameterize ((current-request-context request-context))
+	(let/cc k
+	  (set! (request-ceasontext-return request-context) k)
+	  (let (value (function request-context))
+	    (request-context-respond request-context value))))))
+#+END_SRC
+
+
+* Dynamic Functions*
+#+BEGIN_SRC scheme
+
+  (def current-request-context
+    (make-parameter #f))
+
+  (def (respond* value
+		 return-code: (c #f)
+		 headers: (h #f))
+    ((request-context-return (current-request-context))
+     (request-context-respond
+      (current-request-context) value return-code: c headers: h)))
+
+  (def (abort*)
+    ((request-context-return (current-request-context))
+     (void)))
+
+  (def (content-type*)
+    (reply-content-type (request-context-reply (current-request-context))))
+
+  (def (content-type*-set! content-type)
+    (reply-content-type-set!
+     (request-context-reply (current-request-context))
+     content-type))
+
+
+  (def (call-with-request-context
+	function
+	request: (request (void))
+	reply: (reply (create-reply))
+	response: (response (void)))
+    (let (request-context
+	  (make-request-context
+	   request: request
+	   reply: reply
+	   response: response))
+      (parameterize ((current-request-context request-context))
+	(let/cc k
+	  (set! (request-context-return request-context) k)
+	  (let (value (function request-context))
+	    (request-context-respond request-context value))))))
+
+  (import :ftw/server)
+
+  (defclass (test-request-context-server ftw-server)())
+
+  (defmethod (ftw-server-handler (server test-request-context-server))
+    (lambda (req res)
+      (call-with-request-context
+       (lambda (c) (set! (content-type*) "text/plain")
+	       (respond* (http-request-url
+			  (request-context-request
+			   (current-request-context)))))
+       request: req response: res)))
+
+  (def server (make-test-request-context-server))
+
+  (start-ftw-server! server)
+       
+
+  
+#+END_SRC
+
+
+
+
+

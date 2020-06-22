@@ -1,0 +1,123 @@
+#+TITLE: For The Web! 
+
+* Introduction 
+
+* Getting Started 
+  :PROPERTIES:
+  :header-args: :noweb-ref getting-started-code
+  :END:
+
+  The first use of *FTW!* is a standard web application, which, coincidentally,
+  is the reasoning behind *FTW!* itself. We've decided on *JSON* as the primary
+  interface from the middle and back ends to the user interface. 
+
+**  The Default "page"
+
+   Things are supposed to be simple. Defining a default tells us all the
+   defaults. The ~:drewc/ftw~ module has the bare minimum for defaulting to what
+   is in store.
+
+   #+begin_src gerbil
+     (import :drewc/ftw)
+   #+end_src
+
+*** Server
+
+    We'll define a server that will be used by the rest of our code. This can be
+    started at any time, so for testing we'll make a form to do just that.
+
+    ~start-ftw-http-server!~ and ~stop-ftw-http-server!~ are the important forms.
+
+   #+begin_src gerbil
+     (def server-address "127.0.0.1:8042")
+     (def server-url (string-append "http://" server-address))
+
+     (def ftw-httpd #f)
+
+     (import :std/net/request)
+     (def (test-http-get url) (http-get (string-append server-url url)))
+
+     (defrules with-ftw-httpd []
+       ((_  body ...)
+        (with-unwind-protect
+         (lambda () (when ftw-httpd (stop-ftw-http-server! ftw-httpd))
+            (set! ftw-httpd (start-ftw-http-server! server-address))
+           body ...)
+         (cut stop-ftw-http-server! ftw-httpd))))
+
+    #+end_src
+
+*** Endpoint
+
+    An ~endpoint~ is just that. They are [[file:~/src/ftw/src/httpd/endpoint.org][documented in detail]]. Defining the
+    default is also simple.
+
+    #+begin_src gerbil
+      (define-endpoint default list priority: +inf.0)
+    #+end_src
+  
+    In short, by default, an identifier called ~default::endpoint~ is defined and
+    added to the ~drewc/ftw/httpd/endpoint#default-endpoint-http-mux~
+
+    That name is used to identify it in the mux as well as tell us the name of
+    the default handlers.
+
+    When a procedure is passed as the second argument, it is a predicate that
+    accepts the request and when true returns a list of parameters that will be
+    passed to the handling function. In this case it just returns the request,
+    as list is a predicate that always returns a list.
+
+    We only want the default to run after everything else has failed. The
+    ~endpoint-queue~ allows us to say so with the ~priority:~ keyword.
+
+
+*** Handler
+
+    The ~endpoint~ in now in the ~default-endpoint-http-mux~. We now declare a
+    handler. By default, a handler is ~name/METHOD~, toplevel, in the same
+    expander context as the definition. ~http-response-write*~ belongs to
+    [[file:~/src/ftw/src/httpd/handler.org][ftw/httpd/handler]], which exports ~current-http-request~ and
+    ~current-http-response~ and then a bunch of *shorthanded* functions like
+    that.
+
+    #+begin_src gerbil 
+      (def (test-h1 str) (string-append "<h1> Not Found : "str" </h1>"))
+
+      (def (default/GET req)
+        (http-response-write* 404 [] (test-h1 (http-request-path req))))
+    #+end_src
+
+    For testing things we'll do some imports. These are not needed for the use of
+    *FTW!*, but helps to see as well as test the endpoints themselves.
+
+    #+begin_src gerbil 
+      (import :std/interactive :std/test :std/net/request)
+    #+end_src
+
+    #+begin_src gerbil
+      (with-ftw-httpd
+       (let (r (test-http-get "/foo"))
+         (check (request-text r) => (test-h1 "/foo"))))
+    #+end_src
+
+
+* Testing  
+
+
+    #+begin_src gerbil
+      (check
+       (with-input-from-string
+           (with-output-to-string
+             "" (cut @expand1 (define-endpoint default "(.*)" priority: +inf.0)))
+         read)
+             => 
+             '(begin
+                (def default::endpoint
+                  (drewc/ftw/httpd/endpoint/struct#make-endpoint 'default "(.*)"))
+                (drewc/ftw/httpd/endpoint/mux#add-endpoint-to-mux!
+                 default::endpoint
+                 drewc/ftw/httpd/endpoint#default-endpoint-http-mux
+                 priority:
+                 +inf.0)
+                default::endpoint))))
+    #+end_src

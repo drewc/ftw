@@ -1,0 +1,974 @@
+#+TITLE: Endpoints: For The Web!
+#+SEQ_TODO:   TODO(t) INPROGRESS(i) WAITING(w@) | DONE(d) CANCELED(c@)
+
+A way to define and dispatch on endpoints: For The Web!
+
+#+begin_src gerbil
+  (import :drewc/ftw/httpd/endpoint) 
+  (import :drewc/ftw/httpd/handler) 
+  (import :std/test :std/net/httpd :std/net/request)
+#+end_src
+
+* Overview 
+
+Essentially, endpoints a no nonsense declarative way to define functions for URLs, and a
+~mux~ that takes care of them.
+
+First things first, imports to just use endpoints. In reality we'll likely just
+import [[file:~/src/ftw/src/ftw.org][the ftw module]] itself, but for testing as well as this overview, we'll
+import things as needed.
+
+#+begin_src gerbil 
+  (import :drewc/ftw/httpd/endpoint) 
+#+end_src
+
+The endpoint module exports ~define-endpoint~ which is syntax to, well, define
+an endpoint.
+
+#+begin_src gerbil
+  (define-endpoint overview "^/([^-]*)-?overview/?(.*)")
+#+end_src
+
+What it does by default is define an endpoint so that, when a request comes it,
+the pregexp is attempted. If it matches, any regexp groups are passed as
+arguments to the function it calls.
+
+There are keyword arguments available for ~define-endpoint~
+
+   - ~priority:~ :: The [[#overview_priority][priority whereby the queue tries the match and hander.]]
+
+
+** Identify Handler Function
+
+ The functions it may call are based on the name, in this case ~test~, and the
+ method the server uses to get the page. So, to start with, ~test/GET~.
+
+ #+begin_src gerbil 
+   (import :drewc/ftw/httpd/handler) 
+ #+end_src
+
+ #+begin_src gerbil  
+   (def (overview/GET prefix postfix)
+     (http-response-write* 200 [] (string-append prefix " ov " postfix)))
+ #+end_src
+
+ Wait, ~http-response-write*~? What is that? [[file:handler.org][~:drewc/ftw/httpd/handler~]] exports
+ ~current-http-request~ and ~current-http-response~. That allows our functions to
+ be under a request-response cycle without specific names unless needed.
+
+** Endpoint Mux
+
+ An ~http-server~ requires a ~mux~ in order to dispatch and handle requests and
+ ~:drewc/ftw/httpd/endpoint~ exports [[*Endpoint][~default-endpoint-http-mux~]] which as the
+ name implies is used by default.
+
+** Test http request and server
+
+   Define some precursors. Check out Gerbil's [[https://cons.io/tutorials/httpd.html][httpd tutorial]] for what they are.
+
+ #+begin_src gerbil :noweb-ref test-http-request
+   (import :std/test :std/net/httpd :std/net/request)
+
+   (def server-address "127.0.0.1:9942")
+
+   (def server-url (string-append "http://" server-address)) 
+
+   (def (test-http-get url) (http-get (string-append server-url url))) 
+
+   (def httpd #f) 
+
+   (defrules with-httpd []
+     ((_ mux body ...)
+      (with-unwind-protect
+       (lambda ()
+         (when httpd 
+           (stop-http-server! httpd))
+         (set! httpd (start-http-server! server-address mux: mux))
+         body ...)
+       (lambda () (stop-http-server! httpd)))))
+ #+end_src
+
+** The first test.
+
+   Up until this point we've only defined things. Now time to use them.
+
+   #+begin_src gerbil :noweb-ref overview-test
+     (with-httpd
+      default-endpoint-http-mux
+      (let (r (test-http-get "/first-overview"))
+        (check (request-status r) => 200)
+        (check (request-text r) => "first ov "))
+      (let (r (test-http-get "/first-overview/test"))
+        (check (request-status r) => 200)
+        (check (request-text r) => "first ov test")))
+   #+end_src
+
+** 404 aka default handler 
+
+   What happens if there is no endpoint that matches? A 404 error is returned.
+
+   #+begin_src gerbil :noweb-ref overview-test
+     (with-httpd
+      default-endpoint-http-mux
+      (let (r (test-http-get "/nope"))
+        (check (request-status r) => 404)
+        (check (request-text r) => "these aren't the droids you are looking for")))
+   #+end_src
+
+   We can set it to something different, as the mux has ~endpoint-http-mux-404-handler~  
+
+#+begin_src gerbil
+  (with-httpd
+   default-endpoint-http-mux
+   (let* ((mux default-endpoint-http-mux)
+          (prev (endpoint-http-mux-404-handler mux)))
+     ;; set! to a new 404 handler
+     (set! (endpoint-http-mux-404-handler mux)
+       (lambda (req res)
+         (http-response-write
+          res 404 '(("Content-Type" . "text/plain"))
+          (string-append "Not Found: " (http-request-path req)))))
+     (with-unwind-protect
+      (lambda ()
+        ;; does it work? 
+        (let (r (test-http-get "/nope"))
+          (check (request-text r) => "Not Found: /nope")))
+      ;; reset the handler
+      (cut set! (endpoint-http-mux-404-handler mux) prev))))
+#+end_src
+
+** ~priority:~, and a default in queue! 
+   :PROPERTIES:
+   :CUSTOM_ID: overview_priority
+   :END:
+
+   Because by default an endpoint matches a regexp there could be many regexps
+   that match the same request, a ~priority:~ argument is provided.
+
+   For example, say we want an endpoint that matches "/overview" specifically.
+   While our existing one does match it in general, this is a more specific
+   case. By default, the priority of all endpoints is ~42~.
+
+   #+begin_src gerbil 
+     (check (endpoint-queue-default-priority
+             (endpoint-http-mux-queue default-endpoint-http-mux))
+            => 42)
+   #+end_src
+
+   The priority is how the endpoints are first sorted. By setting an endpoint
+   with a *lower* priority, it is run first.
+
+#+begin_src gerbil
+  (define-endpoint specific-overview "^/overview$"
+   priority: 1)
+  (def (specific-overview/GET) 
+    (http-response-write* 200 [] "Specific overview!"))
+#+end_src
+
+#+begin_src gerbil
+  (with-httpd
+   default-endpoint-http-mux
+   (let (r (test-http-get "/overview"))
+     (check (request-status r) => 200)
+     (check (request-text r) => "Specific overview!"))
+   (let (s (test-http-get "/overview/"))
+     (check (request-status s) => 200)
+     (check (request-text s) => " ov "))
+
+   ;; and turn it around.
+   (add-endpoint-to-mux!
+    specific-overview::endpoint default-endpoint-http-mux
+    priority: 43)
+   (let (t (test-http-get "/overview"))
+     (check (request-status t) => 200)
+     (check (request-text t) => " ov "))
+
+   ;; and back
+   (add-endpoint-to-mux!
+    specific-overview::endpoint default-endpoint-http-mux
+    priority: 1))
+#+end_src
+
+** ~endpoint-match-predicate~, not everything is a regexp!
+
+   By default, when a string is the second argument it's a regexp, and the
+   handler is passed, as arguments, the list returned as groups by the regexp.
+
+   If it's a procedure, that's run with the request as the args.
+
+   #+begin_src gerbil
+     (def (is-42? req (path (http-request-path req)))
+       (and (equal? path "/42") []))
+     (def (is-42/GET)
+       (http-response-write*
+        200 [] "The Answer to Life, the Universe, and Everything"))
+     (define-endpoint is-42 is-42?)
+   #+end_src
+
+   #+begin_src gerbil
+     (with-httpd
+      default-endpoint-http-mux
+      (let (r (test-http-get "/42"))
+        (check (request-text r)
+               => "The Answer to Life, the Universe, and Everything")))
+   #+end_src
+   
+   
+* Endpoint
+  :PROPERTIES:
+  :header-args: :noweb-ref endpoints-code
+  :END:
+
+For simple toplevel declarations, a toplevel default [[#endpoint_mux][Endpoint Mux]] is nice to have.
+
+#+begin_src gerbil
+  (def default-endpoint-http-mux (endpoint-http-mux))
+#+end_src
+
+When defining an endpoint they'll be identified as ~name::endpoint~. The args
+that are accepted wrap it up.
+
+  - ~mux:~ :: the mux this endpoint will be added to.  
+
+#+begin_src gerbil 
+  (defsyntax (define-endpoint stx)
+    (syntax-case stx ()
+      ((macro name match args ...)
+       (let* ((props (syntax->datum #'(args ...)))
+              (name (syntax->datum #'name))
+              (m (syntax->datum #'match))
+              (mux (or (pget mux: props)
+                       'drewc/ftw/httpd/endpoint#default-endpoint-http-mux))
+              (p (pget priority: props))
+              (h (pget handler: props))
+              (endpoint `(drewc/ftw/httpd/endpoint/struct#make-endpoint
+                          ',name ,m ,@(if h [handler: h] [])))
+              (defname (string->symbol
+                        (string-append (symbol->string name) "::endpoint")))
+              (form
+               `(begin (def ,defname ,endpoint)
+                       (drewc/ftw/httpd/endpoint/mux#add-endpoint-to-mux!
+                        ,defname ,mux ,@(if p [priority: p] []))
+                       ,defname)))
+         (datum->syntax #'macro form)))))
+#+end_src
+
+
+
+
+#+begin_src gerbil :noweb-ref test-endpoint
+  (import :std/format)
+  (define-endpoint foo "/foo(.*)")
+
+  (def (foo/GET text)
+    (http-response-write*
+     400 [] (format "EP1!!:~a" text)))
+
+  (define-endpoint epmux1  "/ep1(.*)")
+  (def epmux1/GET foo/GET)
+
+  (define-endpoint default-ep1 "(.*)"
+      handler: (lambda (req res args)
+                 (http-response-write
+                  res 404 '(("Content-Type" . "text/plain"))
+                  (format "Default Not Found: ~a" (car args))))
+     priority: +inf.0)
+
+
+  (with-httpd default-endpoint-http-mux
+    (let ((r1 (test-http-get "/ep1"))
+          (r2 (test-http-get "/foofoo"))
+          (r3 (test-http-get "/nope"))
+          (r4 (test-http-get "/foo")))
+      (check (request-text r1) => "EP1!!:")
+      (check (request-text r2) => "EP1!!:foo")
+      (check (request-status r3) => 404)
+      (check (request-text r4) => (request-text r1))))
+#+end_src
+#+begin_src gerbil  :tangle "endpoint.ss" :noweb yes :noweb-ref endpoint.ss
+  (import :drewc/ftw/httpd/endpoint/struct
+          :drewc/ftw/httpd/endpoint/queue
+          :drewc/ftw/httpd/endpoint/mux
+          (for-syntax  :drewc/ftw/httpd/endpoint/struct)
+           :gerbil/expander)
+  (export #t
+   (import: :drewc/ftw/httpd/endpoint/queue)
+   (import: :drewc/ftw/httpd/endpoint/struct)
+   (import: :drewc/ftw/httpd/endpoint/mux))
+
+   <<endpoints-code>>
+
+#+end_src
+
+
+* DONE Endpoint Mux
+  CLOSED: [2020-01-12 Sun 13:06]
+  :PROPERTIES:
+  :header-args: :noweb-ref endpointmux
+  :CUSTOM_ID: endpoint_mux
+  :END:
+
+To multiplex across an [[#struct_endpoint][Endpoint]] [[#endpoint_queue][Queue]] is very simple. The
+~endpoint-queue-dispatch-function~ is provided by the queue. The queue sorting
+is taken care of by the mux handler.
+
+
+#+begin_src gerbil :tangle "endpoint/mux.ss"
+  (import :drewc/ftw/httpd/endpoint/queue :std/net/httpd/mux :std/net/httpd
+              :gerbil/gambit/exceptions :std/logger)
+  (export #t) 
+  (defstruct endpoint-http-mux
+    (queue sort-every reset-every handler error-handler 404-handler)
+    constructor: :init!)
+
+  (def (default-endpoint-error-handler err req res)
+    (log-error
+     (string-append "Endpoint Handler Error for" (http-request-path req)) err)
+    (http-response-write
+     res 500 '(("Content-Type" . "text/plain")) "Endpoint Handler Error"))
+
+  (def (default-endpoint-404-handler req res)
+    (http-response-write
+     res 404 '(("Content-Type" . "text/plain"))
+     "these aren't the droids you are looking for"))
+
+  (def (endpoint-http-mux-dispatch-function
+        mux
+        (q (endpoint-http-mux-queue mux))
+        (sort-every (endpoint-http-mux-sort-every mux))
+        (reset-every (endpoint-http-mux-reset-every mux)))
+    (let ((sc 0) (rc 0))
+      (lambda (req res)
+        (with-catch
+         (lambda (e) (begin0 #t ((endpoint-http-mux-error-handler mux) e req res)))
+         (lambda ()
+           (if (not ((endpoint-queue-dispatch-function q) req res))
+             (begin0 #t ((endpoint-http-mux-404-handler mux) req res))
+             (begin0 #t
+               (when (= sort-every sc)
+                 (sort-endpoint-queue! q) (set! sc 0))
+               (set! sc (1+ sc))
+               (when (= reset-every rc)
+                 (reset-endpoint-queue-hit-counter! q) (set! rc 0))
+               (set! rc (1+ rc)))))))))
+
+  (defmethod {:init! endpoint-http-mux}
+    (lambda (self sort-every: (se 100) reset-every: (re 1000)
+             queue: (q (endpoint-queue)))
+      (struct-instance-init!
+       self q se re
+       (endpoint-http-mux-dispatch-function self q se re)
+       default-endpoint-error-handler
+       default-endpoint-404-handler)))
+
+  (def (add-endpoint-to-mux! ep mux . queue-args)
+    (apply add-endpoint-to-queue! ep (endpoint-http-mux-queue mux) queue-args))
+
+  (def (remove-endpoint-from-mux! ep mux)
+    (remove-endpoint-from-queue! ep (endpoint-http-mux-queue mux)))
+
+  (defmethod {get-handler endpoint-http-mux}
+    (lambda (self . _)
+      (endpoint-http-mux-handler self)))
+
+  (defmethod {put-handler! endpoint-http-mux}
+    (lambda (mux host path handler)
+      (error "Put handler unbound")))
+#+end_src
+
+** INPROGRESS Testing
+
+ Toplevel.
+ #+begin_src gerbil :noweb-ref test-endpointmux-toplevel
+   (def epmux (endpoint '42 "/ep1(.*)"))
+   (def (42/GET text)
+     (http-response-write*
+      400 [] (format "EP1!!:~a" text)))
+
+ #+end_src
+
+ #+begin_src gerbil :noweb-ref test-endpointmux
+   (def emux (make-endpoint-http-mux))
+
+   (add-endpoint-to-mux! epmux emux priority: 42)
+   (def default-ep
+     (endpoint
+      'default "(.*)"
+      handler: (lambda (req res args)
+                 (http-response-write
+                  res 404 '(("Content-Type" . "text/plain"))
+                  (format "Default Not Found: ~a" (car args))))))
+
+
+
+   (add-endpoint-to-mux! default-ep emux priority: +inf.0)
+
+   (with-httpd emux
+     (let ((r1 (test-http-get "/ep1"))
+           (r2 (test-http-get "/ep1foo"))
+           (r3 (test-http-get "/nope")))
+       (check (request-text r1) => "EP1!!:")
+       (check (request-text r2) => "EP1!!:foo")
+       (check (request-status r3) => 404)))
+
+ #+end_src
+
+ 
+ 
+* INPROGRESS Endpoint Queue 
+  :PROPERTIES:
+  :CUSTOM_ID: endpoint_queue
+  :header-args: :noweb-ref endpoint-q-code
+  :END:
+
+There's an [[#struct_endpoint][~endpoint-dispatch~]] function which returns an function that returns
+true if the endpoint matches and is dispatched to a function.
+
+Chances are there is more than one endpoint needed to resolve. Queuing them
+together is a nice thing for the [[#endpoint_mux][Endpoint Mux]] to DTRT.
+
+Finally, the order in which they are attempted matters both for performance and
+the simple fact that they may be required to be attempted in order as many could
+match the same request. 
+
+That's where the ~priorities~ comes in, which is an alist of:
+   
+    -  ~[[priority-number . [endpoints ...]] ...]~
+
+#+begin_src gerbil
+  (defstruct endpoint-queue (hit-counter priorities default-priority) constructor: :init!)
+
+  (defmethod {:init! endpoint-queue}
+    (cut struct-instance-init! <> (make-hash-table-eq) [] 42))
+#+end_src
+
+We can find a queued endpoint. We do this first so that adding will also replace
+an endpoint with the same name if found. Rarely is this needed in production,
+but it helps from a development point of view.
+
+#+begin_src gerbil
+  (def (find-queued ep q)
+    (let/cc yup!
+      (begin0 #f
+        (for ((values k v) (in-hash (endpoint-queue-hit-counter q)))
+          (when (eq? (endpoint-name k)
+                     (endpoint-name ep))
+            (yup! k))))))
+#+end_src
+
+
+Strangely enough, we also need to be able to remove one before we add it. Both
+removing and adding requires sorting. To sort the queue is also to construct it.
+
+While priorities do determine the order, we've also chosen to track hits.
+
+#+begin_src gerbil  
+  (def (endpoint-queue-endpoint-hits q ep)
+    (hash-ref (endpoint-queue-hit-counter q) ep 0))
+
+  (def (increment-endpoint-hit-count! q ep)
+    (hash-update!
+     (endpoint-queue-hit-counter q) ep (lambda (n) (if (number? n) (1+ n) 0))))
+
+  (def (reset-endpoint-queue-hit-counter! q)
+    (set! (endpoint-queue-hit-counter q)
+      (make-hash-table-eq))
+    (map-endpoint-queue (lambda (n ep) (increment-endpoint-hit-count! q ep)) q))
+
+
+#+end_src
+
+Those hits and the priorities determine the order in which they are queued. 
+
+  1) Sort the priorities alist using the key in descending order. Higher priorities come
+     first.
+
+  2) Sort the values using the hit count, again in descending order.
+
+#+begin_src gerbil
+  (def (sort-endpoint-queue! q)
+    (sort! (endpoint-queue-priorities q) < car)
+    (for ([_ . eps] (endpoint-queue-priorities q))
+      (sort! eps > (cut endpoint-queue-endpoint-hits q <>)))
+    (endpoint-queue-priorities-set!
+     q
+     (filter (lambda (apair) (not (null? (cdr apair)))) (endpoint-queue-priorities q))))
+
+  (def (map-endpoint-queue fn q)
+    (for ([n . eps] (endpoint-queue-priorities q))
+      (for (ep eps) (fn n ep))))
+
+  (def (endpoint-queue-endpoint-index q ep)
+    (let (n 0)
+      (let/cc k
+        (map-endpoint-queue
+         (lambda (_ ep?) (if (eq? ep? ep) (k n) (set! n (1+ n)))) q)
+        (k #f))))
+
+#+end_src
+
+Again, this is mostly for development, but who knows! We'll remove the same name
+before adding it.
+
+#+begin_src gerbil
+  (def (remove-endpoint-from-queue! e q)
+    (awhen (e (find-queued e q))
+      (for (pair (endpoint-queue-priorities q))
+        (match pair
+          ([_ . eps]
+           (if (member e eps) (set! (cdr pair) (remove (cut eq? e <>) eps))))))
+      (hash-remove! (endpoint-queue-hit-counter q) e)
+        (sort-endpoint-queue! q)))
+#+end_src
+ 
+So now, let us queue an endpoint. We'll store them as keys in the hash table,
+with the value being the number of hits. We'll use that later on to sort the
+queue. 
+
+But we also may want things to appear in a certain order regardless. This way
+we can have a default that always runs at the very end, among other advantages.
+
+We have a default ~priority:~, and another can be passed. That's what's used to
+construct the alist making the queue.
+
+#+begin_src gerbil
+  (def (add-endpoint-to-queue!
+        endpoint queue
+        priority: (priority (endpoint-queue-default-priority queue)))
+    (def exists? (find-queued endpoint queue))
+    (if (not exists?)
+      (let (qlist (assoc priority (endpoint-queue-priorities queue)))
+        (if qlist (set! (cdr qlist) (cons endpoint (cdr qlist)))
+            (let (q (endpoint-queue-priorities queue))
+              (set! (endpoint-queue-priorities queue)
+                [[priority endpoint] . q])))
+        (increment-endpoint-hit-count! queue endpoint)
+        (sort-endpoint-queue! queue))
+      (begin (remove-endpoint-from-queue! endpoint queue)
+             (add-endpoint-to-queue! endpoint queue priority: priority))))
+#+end_src
+
+The end result is that we have an alist of endpoint structs, each endpoint has a
+dispatcher function attached which returns a true value if successful.
+
+
+#+begin_src gerbil 
+  (def (endpoint-queue-dispatch-function queue)
+    (lambda (req res)
+      (def pq (endpoint-queue-priorities queue))
+      (let/cc k
+        (for ([_ . eps] pq)
+          (for (ep eps)
+            (let (this-one-dispatched?
+                  ((endpoint-dispatcher ep) req res))
+              (when this-one-dispatched?
+                (increment-endpoint-hit-count! queue ep)
+                (k #t)))))
+        ;; If here, fail
+        (k #f))))
+#+end_src
+
+** Testing 
+
+#+begin_src gerbil :noweb-ref test-endpoint-queue-toplevel
+  (def eq (endpoint-queue))
+
+  (def (test-endpoint-queue-handler req res)
+    (try 
+     (or ((endpoint-queue-dispatch-function eq) req res)
+         (default-handler req res))
+     (catch (e) (http-response-write
+                 res 500 '(("Content-Type" . "text/plain"))
+                 (with-output-to-string (cut display-exception e))))))
+
+  (def (testq/GET num arg)
+    (http-response-write* 200 '(("Content-Type" . "text/plain"))
+                          (format "num:~a ~a" num arg)))
+
+  (def ep1 (endpoint '1 "/ep(1)(.*)"))
+  (def 1/GET testq/GET)
+  (def ep2 (endpoint '2 "/ep(2)(.*)"))
+  (def 2/GET testq/GET)
+  (def ep3 (endpoint '3 "/ep(3)(.*)"))
+  (def 3/GET testq/GET)
+  (def ep4 (endpoint '4 "/ep(4)(.*)"))
+  (def 4/GET testq/GET)
+  (def ep4-aussi (endpoint '4-aussi "/ep(4)(.*)"))
+  (def 4-aussi/GET testq/GET)
+
+  (def tctx (gx#current-expander-context))
+  (def (teval form)
+    (parameterize ((gx#current-expander-context tctx))
+      (##eval form tctx)))
+#+end_src
+
+#+begin_src gerbil :noweb-ref test-endpoint-queue
+  (with-httpd
+   (make-recursive-http-mux)
+   (http-register-handler httpd "" test-endpoint-queue-handler)
+
+
+   ;; Make sure the hit counter works
+
+   (let ((hits (+ 10 (random-integer 100))))
+     (map (cut add-endpoint-to-queue! <> eq) [ep1 ep2 ep3 ep4])
+     (add-endpoint-to-queue! ep4-aussi eq priority: 1)
+     (check (endpoint-queue-endpoint-hits eq ep1) => 0)
+     (for (x (in-range hits))
+       (let (r (test-http-get "/ep1"))
+         (check (request-text r) => "num:1 ")))
+
+     (check (endpoint-queue-endpoint-hits eq ep1) => hits)
+     (reset-endpoint-queue-hit-counter! eq))
+   ;; Now, 4-aussi comes first, and it should be the only hit for /ep4
+
+   (let ((hits (+ 10 (random-integer 100))))
+     (check (endpoint-queue-endpoint-index eq ep4-aussi) => 0)
+     (check (endpoint-queue-endpoint-hits eq ep4) => 0)
+     (check (endpoint-queue-endpoint-hits eq ep4-aussi) => 0)
+     (for (x (in-range hits))
+       (test-http-get "/ep4"))
+     (check (endpoint-queue-endpoint-hits eq ep4) => 0)
+     (check (endpoint-queue-endpoint-hits eq ep4-aussi) => hits)
+     (reset-endpoint-queue-hit-counter! eq))
+
+  ;; ;; Finally, the actual sorting.
+
+    (let* ((hits (+ 10 (random-integer 1000)))
+           (count [[1 . 0] [2 . 0] [3 . 0] [4 . 0]])
+           (ran (cut 1+ (random-integer 4)))
+           (hit (lambda ((r (ran))) (test-http-get (format "/ep~a" r ))
+                   (set!  (cdr (assoc r count))
+                    (1+ (cdr (assoc r count)))))))
+  ;;    ;; remove-aussi
+
+     (remove-endpoint-from-queue! ep4-aussi eq)
+     (for (x (in-range hits))
+        (hit))
+  ;;   ;;; the hitcount matches?
+     (check (endpoint-queue-endpoint-hits eq ep4) => (cdr (assoc 4 count)))
+  ;;   ;; Now sort
+     (sort-endpoint-queue! eq)
+     (sort! count > cdr)
+
+  ;;   ;; ;; And check
+     (let ((first-ep (teval (string->symbol (format "ep~a" (caar count)))))
+           (last-ep (teval (string->symbol (format "ep~a" (car (last count)))))))
+       (check (endpoint-queue-endpoint-index eq first-ep) => 0)
+       (check (endpoint-queue-endpoint-index eq last-ep) => 3))
+
+     (reset-endpoint-queue-hit-counter! eq)))
+#+end_src
+
+
+* INPROGRESS /Struct/ Endpoint 
+  :PROPERTIES:
+  :header-args: :noweb-ref endpoint-struct :comments noweb
+  :CUSTOM_ID: struct_endpoint
+  :END:
+
+What is an endpoint? It's simply a name and predicate. When the predicate
+matches, it returns the arguments passed to the handler, and says it was dispatched.
+
+#+begin_src gerbil
+  (defstruct endpoint (name match handler) constructor: :init!)
+
+  (defmethod {:init! endpoint}
+    (lambda (self name match handler: (h (endpoint-name->handler name)))
+      (struct-instance-init! self name match h))
+    rebind: #t)
+
+  (def (endpoint-dispatcher endpoint)
+    (let ((predicate? {endpoint-match-predicate endpoint})
+          (handler (endpoint-handler endpoint)))
+      (lambda (req res)
+        (let (args (predicate? req))
+          (and args (begin0 #t (handler req res args)))))))
+#+end_src
+
+The dispatcher is made to take a request and response, but was can test this
+basic thing by itself.
+
+#+begin_src gerbil :noweb-ref test-endpoint-struct
+  (def end-dis::endpoint
+    (make-endpoint 'end-dis (? (and list? identity))
+                   handler: 
+                   (lambda (req res args)
+                     (displayln "Dis!"))))
+
+  (let (strp (open-string ""))
+    (check (parameterize ((current-output-port strp))
+              ((endpoint-dispatcher end-dis::endpoint)
+             
+               ["request-as-list-lol"] 'response-as-sym))
+           => #t)
+    (check (get-output-string strp) => "Dis!\n")
+    (check (parameterize ((current-output-port strp))
+             ((endpoint-dispatcher end-dis::endpoint)
+             
+              "request-as-string" 'response-as-sym))
+           => #f)
+    (check (get-output-string strp) => ""))
+#+end_src
+
+** Matching a request 
+   :PROPERTIES:
+   :CUSTOM_ID: endpoint_match
+   :END:
+
+The entire point of endpoints is a declarative syntax which is short-winded.
+Because regular expressions have groups, and that's a syntax that we all know
+and love/hate, we'll use them.
+
+#+begin_src gerbil
+  (def (endpoint-pregexp-match-predicate endpoint)
+    (lambda (request (path (http-request-path request)))
+      (let ((groups (pregexp-match (endpoint-match endpoint) path)))
+        (and groups (cdr groups)))))
+#+end_src
+
+Otherwise, we make an assumption that match is a predicate that takes the
+request.
+
+#+begin_src gerbil
+  (defmethod {endpoint-match-predicate endpoint}
+    (lambda (self (m (endpoint-match self)))
+      (cond ((string? m) (endpoint-pregexp-match-predicate self))
+            ((procedure? m) m)
+            (#t (error "Endpoint Match is not a string or a procedure")))))
+#+end_src
+
+** Handling a matched request
+re
+If a request matches the predicate, it returns a list of arguments to be passed
+to the handler. By default, a handler is a function, ~name/METHOD~.
+
+ - GET :: The GET method requests a representation of the specified resource.
+          Requests using GET should only retrieve data.
+ - HEAD :: The HEAD method asks for a response identical to that of a GET
+           request, but without the response body.
+ - POST :: The POST method is used to submit an entity to the specified
+           resource, often causing a change in state or side effects on the
+           server.
+ - PUT :: The PUT method replaces all current representations of the target
+          resource with the request payload.
+ - DELETE :: The DELETE method deletes the specified resource.
+ - CONNECT :: The CONNECT method establishes a tunnel to the server identified
+              by the target resource.
+
+ - OPTIONS :: The OPTIONS method is used to describe the communication options
+              for the target resource.
+ - TRACE :: The TRACE method performs a message loop-back test along the path to
+            the target resource.
+
+ - PATCH :: The PATCH method is used to apply partial modifications to a
+            resource.
+
+#+begin_src gerbil
+  (def (endpoint-name->handler name)
+    (defsyntax (handler stx)
+      (syntax-case stx  ()
+        ((h meth)
+         (let (M (syntax->datum #'meth))
+           (datum->syntax #'h
+             `(let (fn (or ,M
+                           (parameterize ((gx#current-expander-context ctx))
+                             (##eval
+                              `(lambda (args)
+                                 (apply ,(string->symbol (format "~a/~a" name ',M)) args))
+                              ctx))))
+                (begin0 (fn args)
+                  (unless ,M (set! ,M fn)))))))
+        ((h ms ...)
+         (let* ((methods (syntax->datum #'(ms ...)))
+                (lets (map (lambda (m) [m #f]) methods))
+                (cases (map (lambda (m) [[m] `(handler ,m)]) methods)))
+           (datum->syntax #'h
+             `(let ,lets
+                (lambda (req res args)
+                  (let ((method (http-request-method req)))
+                    ((ftw-handler (case method ,@cases))
+                     req res)))))))))
+    (let (ctx (gx#current-expander-context))
+        (handler GET HEAD POST PUT DELETE CONNECT OPTIONS TRACE PATCH)))
+
+#+end_src
+
+
+** Testing 
+   :PROPERTIES:
+   :header-args: :noweb-ref test-endpoint-struct-toplevel
+   :END:
+
+We'll create an endpoint struct, and a ~GET~ handler for it. 
+
+The ~match~ is a string and [[#endpoint_match][by default]] we match regexp groups. Our regexp does a
+whole bunch of things just to have fun with the reasoning behind.
+
+#+begin_src gerbil 
+  (def test::endpoint (endpoint 'test "^/([^/]*)/?test/?(.*)"))
+#+end_src
+t
+For our handler, simply format the args and return them as text
+
+#+begin_src gerbil 
+  (def (test/GET . args)
+    (http-response-write* 200 '(("Content-Type" . "text/plain"))
+                          (format "~a" args)))
+#+end_src
+
+The other way is to pass a function. Since we pass args to the handler, we can
+then pass whatever we want.
+
+#+begin_src gerbil
+  (def (match-function? req)
+    (and (string=? (http-request-path req) "/function")
+         [(http-request-url req)]))
+
+  (def match::endpoint (endpoint 'match match-function?))
+
+  (def match/GET test/GET)
+#+end_src
+
+Now a simple handler to register with the existing mux.
+
+
+#+begin_src gerbil 
+  (def (test-endpoint-handler req res)
+    (try 
+     (or ((endpoint-dispatcher test::endpoint) req res)
+         ((endpoint-dispatcher match::endpoint) req res)
+         (default-handler req res))
+     (catch (e) (http-response-write
+                 res 500 '(("Content-Type" . "text/plain"))
+                 (with-output-to-string (cut display-exception e))))))
+#+end_src
+Let's make sure it works! 
+
+#+begin_src gerbil :noweb-ref test-endpoint-struct
+  ;; (def httpd
+  ;;   (start-http-server! server-address mux: (make-recursive-http-mux)))
+
+  (http-register-handler httpd "" test-endpoint-handler)
+
+  (let (req (test-http-get "/this-is-a/test"))
+    (check (request-status req) => 200)
+    (check (request-text req) => "(this-is-a )"))
+
+
+    (let (req (test-http-get "/this-is-atest"))
+      (check (request-status req) => 200)
+      (check (request-text req) => "(this-is-a )"))
+
+    (let (req (test-http-get "/this-is-a/test/request"))
+      (check (request-status req) => 200)
+      (check (request-text req) => "(this-is-a request)"))
+
+
+    (let (req (test-http-get "/this-is-atestrequest"))
+      (check (request-status req) => 200)
+      (check (request-text req) => "(this-is-a request)"))
+
+    (let (req (test-http-get "/function?bar=baz"))
+      (check (request-status req) => 200)
+      (check (request-text req) => "(/function?bar=baz)"))
+
+  ;; (stop-http-server! httpd)
+
+
+#+end_src
+
+* INPROGRESS Testing 
+  :PROPERTIES:
+  :CUSTOM_ID: Testing
+  :END:
+
+#+begin_src gerbil :noweb yes :tangle "endpoint-test.ss" 
+  (import :std/test  :std/sugar  :std/net/request :std/net/httpd 
+              :drewc/ftw/httpd/handler :std/format :std/iter :std/srfi/95
+              :drewc/ftw/httpd/endpoint/struct
+              :drewc/ftw/httpd/endpoint/queue
+              :drewc/ftw/httpd/endpoint/mux
+              :gerbil/gambit/exceptions
+              :gerbil/gambit/ports
+              (only-in :gerbil/gambit/random random-integer))
+
+  <<test-http-request>>
+
+  (export endpoint-test)
+
+  (def greeting-not-found "these aren't the droids you are looking for")
+
+  (def (default-handler req res)
+    (http-response-write
+     res 404 '(("Content-Type" . "text/plain")) greeting-not-found))
+
+  <<test-endpoint-struct-toplevel>>
+  <<test-endpoint-queue-toplevel>>
+  <<test-endpointmux-toplevel>>
+  (def endpoint-test
+    (test-suite
+     "test :drewc/ftw/httpd/endpoint"
+
+
+     (test-case
+      "Endpoint Struct: basic dispatch"
+      (with-httpd (make-recursive-http-mux)
+        <<test-endpoint-struct>>))
+
+     (test-case "Endpoint Queue"
+      (with-httpd (make-recursive-http-mux)
+                  <<test-endpoint-queue>>))
+
+      (test-case "Endpoint Mux"
+                 <<test-endpointmux>>)))
+
+
+
+
+
+
+
+
+
+
+
+#+end_src
+
+
+
+* Files 
+
+** endpoint/struct.ss 
+
+#+begin_src gerbil :tangle endpoint/struct.ss :noweb yes :comments noweb
+  (import :std/net/httpd 
+          :std/pregexp :gerbil/expander
+          :std/sugar :std/format :std/srfi/95 :std/iter :std/error
+         :drewc/ftw/httpd/handler)
+  (export #t)
+
+  <<endpoint-struct>>
+#+end_src
+
+** endpoint/queue.ss
+
+#+begin_src gerbil :tangle "endpoint/queue.ss" :noweb yes
+  ;;; (c) drewc <me@drewc.ca>
+
+  (import :std/srfi/1 :std/srfi/95 :std/iter :drewc/ftw/httpd/endpoint/struct :std/sugar)
+  (export #t)
+
+  <<endpoint-q-code-tangled>>
+
+#+end_src
+
+#+begin_src gerbil  :noweb yes :comments noweb :noweb-ref endpoint-q-code-tangled
+  <<endpoint-q-code>>
+#+end_src
+
+* HACKING 
+#+begin_src gerbil
+  (import :drewc/ftw/httpd/endpoint/mux)
+
+#+end_src
