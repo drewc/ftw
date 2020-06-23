@@ -4,15 +4,14 @@
 (import :std/build-script)
 
 (defbuild-script
-  '("src/httpd/handler"
-    "src/httpd/parameters"
-    ;; Endpoints
-    
-    "src/httpd/endpoint/struct" "src/httpd/endpoint/queue"
-    "src/httpd/endpoint/mux"
-    "src/httpd/endpoint-test"
-    "src/httpd/endpoint"
-    "src/httpd/cookies"
-    "src/httpd"
-    "src/ftw"
-    "test/all-tests"))
+  '("ftw/httpd/handler"
+    "ftw/httpd/parameters"
+    "ftw/httpd/endpoint/struct"
+    "ftw/httpd/endpoint/queue"
+    "ftw/httpd/endpoint/mux"
+    "ftw/httpd/endpoint-test"
+    "ftw/httpd/endpoint"
+    "ftw/httpd/cookies"
+    "ftw/httpd"
+    "ftw"
+    "ftw/test/all-tests"))

@@ -1,2 +1,2 @@
-;; All in ftw package
-(package: drewc/ftw)
+;;  This is MY PACKAGE!!!
+(package: drewc)
