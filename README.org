@@ -1,12 +1,12 @@
-FTW: For The Web! 
+FTW: For The Web!
 
 I've have been a developer, for the web, from a long time ago in a
 galaxy far far away. In such time, I've developed a number of habitual
 programs and libraries.
 
-The outcome is this code, FTW!. 
+The outcome is this code, FTW!.
 
-* Gerbil 
+* Gerbil
 
 Most of the code is gerbil. Gerbil is an opinionated dialect of Scheme
 designed for Systems Programming, with a state of the art macro and
@@ -16,7 +16,7 @@ See https://github.com/vyzo/gerbil.
 
 ** Installation
 
-It is available as a ~gxpkg~ from *[[http://github.com/drewc/gerbil-ftw][github.com/drewc/gerbil-ftw]]*.
+It is available as a ~gxpkg~ from *[[http://github.com/drewc/gerbil-ftw][github.com/drewc/ftw]]*.
 
 #+BEGIN_SRC sh
 gxpkg install github.com/drewc/ftw
@@ -25,7 +25,7 @@ gxpkg install github.com/drewc/ftw
 Or, if you prefer to hack.
 
 #+BEGIN_SRC sh
-gxpkg link github.com/drewc/ftw ~/src/ftw/gerbil
+gxpkg link github.com/drewc/ftw ~/me/src/ftw/
 gxpkg build github.com/drewc/ftw
 #+END_SRC
 
@@ -35,7 +35,7 @@ A lot of the old code is common lisp. It is in the ~lisp/~ and/or the
 ~lisp~ branch.  directory. Some of it is still used, and it may still
 work wonders.
 
-* License 
+* License
 
 (C) 2010-2018 Drew Crampsie <me@drewc.ca>
 
@@ -63,5 +63,3 @@ ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 
 For more information, please refer to <http://unlicense.org/>
-
-
