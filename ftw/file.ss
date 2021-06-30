@@ -34,7 +34,7 @@
 
 (def (file-headers (file "/bin/sh"))
   [["Last-Modified" (file-modification-rfc-1123-date file) ...]
-   ["Content-Length" (file-size file) ...]
+   ["Content-Length" (number->string (file-size file)) ...]
    ["Content-Type" (file-content-type file) ...]
    ["Content-Disposition" (format "attachment; filename=~a" (file-name file)) ...]
    ["Accept-Ranges" . "none"]])

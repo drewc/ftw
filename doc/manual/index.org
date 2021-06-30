@@ -1,0 +1,101 @@
+#+TITLE: For The Web!: User Manual
+
+* Introduction
+
+Because I tend to develop and use ~FTW~ all over the place and with no
+particular ordering it helps to have documentation in one place that outlines
+what works.
+
+This is that.
+
+* Server, ~:drewc/ftw~, For The Web!
+
+Running a server is in fact quite important. In fact, a lot of applications
+built for the web rely on one as, well, that's somewhat the point of teh
+interwebs.
+
+#+begin_src scheme
+(import :drewc/ftw :std/format)
+
+(def test-ftw-http-server #f)
+
+(def (ensure-ftw-server! address: (address "127.0.0.1") port: (port 8389))
+ (def saddress (format "~a:~a" address port))
+ (or test-ftw-http-server
+     (let ((s (start-ftw-http-server! saddress)))
+       (set! test-ftw-http-server s)
+       s)))
+#+end_src
+
+Let's start it up.
+
+#+begin_src scheme
+(ensure-ftw-server!) ;; => #<thread #22 http-server>
+#+end_src
+
+We can use ~curl~ to test it out.
+
+#+begin_src shell
+curl http://localhost:8389/
+# => these aren't the droids you are looking for
+#+end_src
+
+#+RESULTS:
+: these aren't the droids you are looking for
+
+While a server itself is nice having an endpoint to hit is needed. We'll go
+through the details.
+
+** Endpoints: ~define-endpoint~ and friends
+
+What if we know where the droids are?
+
+#+begin_src scheme
+(define-endpoint droids "^/droids/(R2D2|C3PO)$")
+
+(def (droids/GET name)
+  (def say (if (string=? name "C3PO")
+             "It’s Against My Programming To Impersonate A Deity.\n"
+             "Beep Boop Beep Bleep Boop\n"))
+  (http-response-write* 200 [["Content-Type" "text/plain; charset=us-ascii" ...]] say))
+#+end_src
+
+We can see that we define an endpoint named ~droids~ where the matching
+predicate is a pregex. The matching predicate returns a list which is applied to
+the handler function as arguments.
+
+Testing it out should tell us what we want.
+
+#+begin_src shell
+$ curl http://localhost:8389/droids/C3PO
+It’s Against My Programming To Impersonate A Deity.
+$ curl http://localhost:8389/droids/R2D2
+Beep Boop Beep Bleep Boop
+$ curl http://localhost:8389/droids/BB-8
+these aren't the droids you are looking for
+#+end_src
+
+** ~endpoint-match-predicate~, when regexps are not enough.
+
+There are times when a regular expression is not enough. For example we want a
+handler which, if there are no matched handlers, serves files from our ~wwwroot~
+*if they exist*.
+
+#+begin_src scheme
+(import :drewc/ftw/file (only-in :gerbil/gambit path-expand)
+        :std/srfi/13)
+
+(def wwwroot "/etc")
+
+(def (static-file? req (path (http-request-path req)))
+  (def fn (path-expand (string-trim path #\/) wwwroot))
+  (if (file-exists? fn) [fn] #f))
+
+(define-endpoint static-file static-file?
+  priority: 1042)
+
+(define (static-file/GET fn)
+  (http-response-file* (file-headers fn) fn))
+
+(define static-file/GET ftw-file-handler)
+#+end_src
