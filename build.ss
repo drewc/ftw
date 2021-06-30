@@ -14,6 +14,7 @@
     "ftw/httpd/cookies"
     "ftw/timestamp"
     "ftw/file/mime-type"
+    "ftw/file"
     "ftw/httpd"
     "ftw"
     "ftw/test/all-tests"))

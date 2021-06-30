@@ -1,25 +1,3 @@
-#+TITLE: Files.
-
-We do a lot with files. Mainly, we want to serve them with a [[file:httpd/file-handler.org][file-handler]].
-
-
-* Usage
-
-There are a few things that can help with the serving of files.
-
-#+begin_src scheme
-(import :drewc/ftw/file)
-(file-headers "/etc/passwd")
-
-;; =>
-;; (("Last-Modified" . "Wed, 30 Jun 2021 00:35:43 GMT")
-;;  ("Content-Length" . 2458)
-;;  ("Content-Type" . "text/plain; charset=us-ascii")
-;;  ("Content-Disposition" . "attachment; filename=passwd")
-;;  ("Accept-Ranges" . "none"))
-#+end_src
-
-#+BEGIN_SRC scheme :padline no :tangle "../ftw/file.ss"
 (export #t file-size file-exists?)
 (import
   :drewc/ftw/file/mime-type :drewc/ftw/timestamp :std/format :std/sugar
@@ -60,4 +38,3 @@ There are a few things that can help with the serving of files.
    ["Content-Type" (file-content-type file) ...]
    ["Content-Disposition" (format "attachment; filename=~a" (file-name file)) ...]
    ["Accept-Ranges" . "none"]])
-#+END_SRC
