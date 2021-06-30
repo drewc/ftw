@@ -7,7 +7,7 @@
   :std/pregexp :std/srfi/1 :std/srfi/13 :std/misc/process)
 
 (def (file-extension pathname)
-  (path-extension pathname))
+  (string-trim (path-extension pathname) #\.))
 
 (def (file-mime-type pathname)
   (string-drop-right (run-process ["file" "--mime" "--brief" pathname]) 1))
@@ -16,13 +16,24 @@
   (let* ((ext (file-extension pathname))
          (mtype (if (equal? ext "") #f (extension->mime-type ext)))
          (type #f))
-
     ;; If it is text or non-existant, use `file --mime --brief` to guess the encoding
     (when (or (not mtype)
               (and (pregexp-match "^text" mtype)
                (not (pregexp-match ";\\s*charset=" mtype))))
-      (set! type (try (file-mime-type pathname)
-                      (catch (e) #f))))
+      (let* ((type? (try (file-mime-type pathname)
+                         (catch (e) #f)))
+             (sp? (if type? (string-split type? #\;) #f))
+             (charset (if (or (not sp?) (null? (cdr sp?))) #f
+                          (cadr sp?)))
+             (bin (if charset
+                    (let ((cs (string-split charset #\=)))
+                      (string=? (cadr cs) "binary"))
+                  #f))
+             (our-type (if (and charset (not bin) mtype)
+                         (format "~a;~a" mtype charset)
+                         (or mtype type?))))
+      (set! type our-type)))
+
     (or type mtype "application/octet-stream")))
 
 (def (file-modification-rfc-1123-date pathname)
@@ -33,8 +44,13 @@
   (path-strip-directory pathname))
 
 (def (file-headers (file "/bin/sh"))
-  [["Last-Modified" (file-modification-rfc-1123-date file) ...]
+  (def ct (file-content-type file))
+  (def cd (if (pregexp-match "^text" ct) []
+              [["Content-Disposition"
+                (format "attachment; filename=~a" (file-name file)) ...]]))
+  (append
+   [["Last-Modified" (file-modification-rfc-1123-date file) ...]
    ["Content-Length" (number->string (file-size file)) ...]
-   ["Content-Type" (file-content-type file) ...]
-   ["Content-Disposition" (format "attachment; filename=~a" (file-name file)) ...]
-   ["Accept-Ranges" . "none"]])
+   ["Content-Type"  ct ...]
+   ["Accept-Ranges" . "none"]]
+   cd))

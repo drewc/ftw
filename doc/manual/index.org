@@ -82,7 +82,7 @@ handler which, if there are no matched handlers, serves files from our ~wwwroot~
 *if they exist*.
 
 #+begin_src scheme
-(import :drewc/ftw/file (only-in :gerbil/gambit path-expand)
+(import (only-in :gerbil/gambit path-expand)
         :std/srfi/13)
 
 (def wwwroot "/etc")
@@ -94,8 +94,5 @@ handler which, if there are no matched handlers, serves files from our ~wwwroot~
 (define-endpoint static-file static-file?
   priority: 1042)
 
-(define (static-file/GET fn)
-  (http-response-file* (file-headers fn) fn))
-
-(define static-file/GET ftw-file-handler)
+(define static-file/GET http-response-static-file*)
 #+end_src
