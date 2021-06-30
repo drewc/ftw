@@ -1,0 +1,63 @@
+#+TITLE: Timestamps : RFC 1123
+
+* Intro
+
+#+begin_quote
+HTTP applications have historically allowed three different formats for the
+representation of date/time stamps:
+
+      Sun, 06 Nov 1994 08:49:37 GMT  ; RFC 822, updated by RFC 1123
+      Sunday, 06-Nov-94 08:49:37 GMT ; RFC 850, obsoleted by RFC 1036
+      Sun Nov  6 08:49:37 1994       ; ANSI C's asctime() format
+
+The first format is preferred as an Internet standard and represents a
+fixed-length subset of that defined by RFC 1123
+#+end_quote
+
+* Usage
+
+The first real use is the modification time of a file. The browsers and servers
+often use this for caching purposes.
+
+#+begin_src scheme
+(import :drewc/ftw/timestamp
+ (only-in :gerbil/gambit/os
+          file-info-last-modification-time
+          file-info))
+
+(def (file-modification-rfc-1123-date pathname)
+  (rfc-1123-date<-gambit/os-time
+   (file-info-last-modification-time (file-info pathname))))
+#+end_src
+
+That does what we need.
+
+#+begin_src scheme
+(file-modification-rfc-1123-date "/etc/passwd")
+;; => "Wed, 30 Jun 2021 00:35:43 GMT"
+#+end_src
+
+* File ~ftw/timestamp.ss~
+#+begin_src scheme :tangle ../ftw/timestamp.ss
+(import :clan/timestamp
+        :std/srfi/19
+        (rename-in :gerbil/gambit/os (time? time??)))
+
+(export #t (import: :clan/timestamp))
+
+(def rfc-1123-format-string "~a, ~d ~b ~Y ~H:~M:~S GMT")
+
+(def (rfc-1123-date<-date date)
+  (date->string date rfc-1123-format-string))
+
+(def (rfc-1123-date<-timestamp timestamp)
+  (rfc-1123-date<-date (date<-unix-timestamp timestamp)))
+
+(def (rfc-1123-date<-srfi-19-time time)
+  (rfc-1123-date<-timestamp (unix-timestamp<-srfi-19-time time)))
+
+(def (rfc-1123-date<-gambit/os-time time)
+  (rfc-1123-date<-srfi-19-time
+   (make-time 'time-utc 0
+              (inexact->exact (time->seconds time)))))
+#+end_src
