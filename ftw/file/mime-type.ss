@@ -1,25 +1,5 @@
-#+TITLE: Mime Types for file extensions : "application/vnd.ms-excel" <- "xls"
+(export #t)
 
-MIME is a a part of MIME (Multipurpose Internet Mail Extensions), yet "Media
-types are also used by other internet protocols such as HTTP and document file
-formats such as HTML for similar purpose."[1]
-
-* Usage
-
-The first thing is ~mime-type<-extension~.
-
-#+begin_src scheme
-(import :drewc/ftw/file/mime-type)
-(mime-type<-extension "jpeg") ;; => "image/jpeg"
-#+end_src
-
-* A list
-
-  An alist where the cars are MIME types and the cdrs are list
-  of file suffixes for the corresponding type.
-
-#+NAME: mime-type-alist 
-#+BEGIN_SRC scheme 
   (def mime-type-alist
     '(("application/andrew-inset" "ez")
       ("application/cu-seeme" "cu")
@@ -339,12 +319,7 @@ The first thing is ~mime-type<-extension~.
       ("video/x-sgi-movie" "movie")
       ("x-conference/x-cooltalk" "ice")
       ("x-world/x-vrml" "vrm" "vrml" "wrl")))
-#+END_SRC
 
-* The Hash
-
-#+NAME: mime-type-table
-#+BEGIN_SRC scheme
   (def mime-type-table
     (let (table (make-hash-table test: equal?))
       (for-each
@@ -357,30 +332,8 @@ The first thing is ~mime-type<-extension~.
                     exts)))
         mime-type-alist)
       table))                         
-#+END_SRC
 
-* ~mime-type<-extension~ and ~extension->mime-type~
-
-#+NAME: extension->mime-type
-#+BEGIN_SRC scheme
   (def (extension->mime-type extension)
     (hash-ref mime-type-table extension #f))
 
   (def mime-type<-extension extension->mime-type)
-#+END_SRC
-
-* mime-type.ss
-
-#+BEGIN_SRC scheme :noweb yes :tangle "../ftw/file/mime-type.ss" :mkdirp t
-(export #t)
-
-<<mime-type-alist>>
-
-<<mime-type-table>>
-
-<<extension->mime-type>>
-#+END_SRC
-* Footnotes
-
-[1] https://en.wikipedia.org/wiki/Media_type
- 
