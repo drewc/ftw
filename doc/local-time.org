@@ -6,7 +6,7 @@
 
 #+BEGIN_SRC scheme
 
-  (import :clan/utils/base :std/srfi/13)
+  (import :clan/base :std/srfi/13)
 
   (def tzfile
     ;"/home/drewc/quicklisp/dists/quicklisp/software/local-time-20170830-git/zoneinfo/Africa/Abidjan"

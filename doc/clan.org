@@ -1,9 +1,9 @@
-CLAN: Common Lisp Archive Network(??)
+CLAN: Community-driven set of Gerbil Utilities (gerbils live in clans)
 
-We use a tonne of CL-like utilites. Lispnicks FTW! 
+We use a tonne of CL-like utilities. Lispnicks FTW!
 
 #+BEGIN_SRC sh
-git remote add clan-remote git@github.com:drewc/gerbil-utils.git
+git remote add clan-remote https://github.com/fare/gerbil-utils.git
 git fetch clan-remote
 git checkout -b clan clan-remote/master
 git read-tree --prefix=gerbil/clan/ -u clan
