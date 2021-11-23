@@ -1,6 +1,6 @@
 (import :drewc/ftw/httpd/endpoint/queue :std/net/httpd/mux :std/net/httpd
-            :gerbil/gambit/exceptions :std/logger)
-(export #t) 
+        :gerbil/gambit/exceptions :std/logger :clan/error)
+(export #t)
 (defstruct endpoint-http-mux
   (queue sort-every reset-every handler error-handler 404-handler)
   constructor: :init!)
