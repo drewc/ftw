@@ -315,11 +315,17 @@ is taken care of by the mux handler.
 
 #+begin_src gerbil :tangle "endpoint/mux.ss"
   (import :drewc/ftw/httpd/endpoint/queue :std/net/httpd/mux :std/net/httpd
-              :gerbil/gambit/exceptions :std/logger)
+              :gerbil/gambit/exceptions :std/logger :std/format)
   (export #t) 
   (defstruct endpoint-http-mux
     (queue sort-every reset-every handler error-handler 404-handler)
     constructor: :init!)
+
+ (def (log-error what exn)
+   (let (outp (open-output-string))
+     (fprintf outp "~a: " what)
+     (display-exception exn outp)
+     (errorf (get-output-string outp))))
 
   (def (default-endpoint-error-handler err req res)
     (log-error

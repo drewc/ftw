@@ -1,2 +1,2 @@
 ;;  This is MY PACKAGE!!!
-(package: drewc)
+(package: drewc depend: (github.com/fare/gerbil-utils))

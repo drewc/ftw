@@ -1,3 +1,6 @@
+:PROPERTIES:
+:ID:       804e4200-1079-4914-acb6-bed69efbbcab
+:END:
 #+TITLE: General things in one place.
 
 Often when using *FTW!* we just want a simple import. This module does just that.
@@ -5,7 +8,9 @@ Often when using *FTW!* we just want a simple import. This module does just that
 #+begin_src gerbil :tangle ftw.ss
   package: drewc
   (import  :drewc/ftw/httpd :drewc/ftw/httpd/handler
-           :drewc/ftw/httpd/parameters :drewc/ftw/httpd/cookies
+           :drewc/ftw/httpd/parameters
+           :drewc/ftw/httpd/cookies
+           :drewc/ftw/httpd/json
            :std/net/httpd)
   (export
           define-endpoint
@@ -14,6 +19,6 @@ Often when using *FTW!* we just want a simple import. This module does just that
           (import: :drewc/ftw/httpd/handler)
           (import: :drewc/ftw/httpd/parameters)
           (import: :drewc/ftw/httpd/cookies)
+          (import: :drewc/ftw/httpd/json)
           (import: :std/net/httpd))
 #+end_src
-

@@ -8,6 +8,7 @@ what works.
 
 This is that.
 
+
 * Server, ~:drewc/ftw~, For The Web!
 
 Running a server is in fact quite important. In fact, a lot of applications
@@ -96,3 +97,49 @@ handler which, if there are no matched handlers, serves files from our ~wwwroot~
 
 (define static-file/GET http-response-static-file*)
 #+end_src
+
+
+* Static Files
+
+Ideally all static files are served using a server designed for such things.
+But, in development or staging and even production, sometimes, we want to serve
+files.
+
+
+In this case we have [[https://getuikit.com][UIkit]], a web css/js framework.
+
+#+begin_src shell
+wget https://github.com/uikit/uikit/releases/download/v3.7.6/uikit-3.7.6.zip
+# Archive:  uikit-3.7.6.zip
+#   inflating: css/uikit-rtl.css
+#   inflating: css/uikit.css
+#   inflating: css/uikit.min.css
+#   inflating: css/uikit-rtl.min.css
+#   inflating: js/uikit-icons.js
+#   inflating: js/uikit-icons.min.js
+#   inflating: js/uikit.js
+#   inflating: js/uikit.min.js
+#+end_src
+
+#+begin_src scheme
+(def static-root-dir (current-directory))
+(define-endpoint js-files "^/js/(.*)$" priority: 1024)
+(define-endpoint css-files "^/css/(.*)$" priority: 1024)
+
+(def (make-getter where)
+  (lambda (filename)
+    (http-response-static-file*
+     (path-expand (string-append where filename)
+                  static-root-dir))))
+
+(def js-files/GET (make-getter "js/"))
+(def css-files/GET (make-getter "css/"))
+
+#+end_src
+
+
+* JSON
+
+* Error log
+
+By default
