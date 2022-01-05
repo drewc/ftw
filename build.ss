@@ -13,6 +13,7 @@
     "ftw/httpd/endpoint-test"
     "ftw/httpd/endpoint"
     "ftw/httpd/cookies"
+    "ftw/httpd/json"
     "ftw/timestamp"
     "ftw/file/mime-type"
     "ftw/httpd"

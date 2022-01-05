@@ -1,0 +1,105 @@
+#+TITLE: JSON: To serve and respond
+
+* JSON, our best friend
+
+Although the UI itself is implemented primarily in a *JavaScript* environment,
+the "server" may not be, and besides, Gerbil is not at all.
+
+** ~/OPTIONS, to make JSON CORSharable
+:PROPERTIES:
+:ID:       9c734dd5-4de1-42a3-b444-3d1954901bb1
+:END:
+
+"Cross-Origin Resource Sharing (CORS) is an HTTP-header based mechanism that
+allows a server to indicate any other origins (domain, scheme, or port) than its
+own from which a browser should permit loading of resources."[fn:mdncors]
+
+Essentially, though mostly for testing at this point, we often access the *JSON*
+server from a different "origin" than what we serve the UI from.
+
+"CORS also relies on a mechanism by which browsers make a “preflight” request to
+the server hosting the cross-origin resource, in order to check that the server
+will permit the actual request. In that preflight, the browser sends headers
+that indicate the HTTP method and headers that will be used in the actual
+request.
+
+[...]
+
+Additionally, for HTTP request methods that can cause side-effects on server
+data (in particular, HTTP methods other than GET, or POST with certain MIME
+types), the specification mandates that browsers "preflight" the request,
+soliciting supported methods from the server with the HTTP OPTIONS request
+method"[fn:mdncors]
+
+Get all that? We'll define an ~/OPTIONS~ handler for all endpoints to use.
+
+#+begin_src scheme :noweb-ref json/OPTIONS
+(def (json/OPTIONS)
+  (let (o (assget "Origin" (http-request-headers*)))
+    (http-response-write*
+     200 `(("Access-Control-Allow-Origin" . ,(or o "*"))
+           ("Access-Control-Allow-Credentials" . "true")
+           ("Access-Control-Allow-Methods" . "POST, GET, OPTIONS")
+           ("Access-Control-Allow-Headers" . "Content-Type"))
+     #f)))
+#+end_src
+
+
+For responding we'll also use JSON most of the time. "Respond with JSON", AKA
+~respond/JSON~, to the rescue.
+
+#+begin_src scheme :noweb-ref respond/JSON
+(def (respond/JSON code: (code 200) json)
+  (let ((o (assget "Origin" (http-request-headers*)))
+        (js (if (not (string? json))
+              (json-object->string json)
+              json)))
+    (http-response-write* code `(("Content-Type" . "application/json")
+                                 ("Access-Control-Allow-Origin" . ,(or o "*"))
+                                 ("Access-Control-Allow-Credentials" . "true"))
+                          js)))
+#+end_src
+
+Sometimes we'll *POST* with *JSON* as the body.
+
+#+begin_src scheme :noweb-ref bodyJSON
+(def (http-request-body-json*)
+  (def vec (http-request-body*))
+  (and vec (with-input-from-u8vector read-json)))
+#+end_src
+
+
+Now for any endpoint that's *JSON*, define it with those options via syntax.
+
+#+begin_src scheme :noweb-ref define-json-endpoint
+(defsyntax (define-json-endpoint stx)
+  (syntax-case stx ()
+   ((macro name loc)
+    (with-syntax ((opt (datum->syntax #'macro (string->symbol
+                        (string-append (symbol->string (syntax->datum #'name))
+                                       "/OPTIONS")))))
+      #'(begin (def opt json/OPTIONS)
+               (define-endpoint name loc))))))
+#+end_src
+
+#+begin_src scheme :tangle "../ftw/httpd/json.ss" :noweb yes
+(export #t)
+
+(import :drewc/ftw/httpd/endpoint :drewc/ftw/httpd/handler
+        :std/text/json :std/srfi/13)
+
+<<json/OPTIONS>>
+
+<<respond/JSON>>
+
+<<bodyJSON>>
+
+<<define-json-endpoint>>
+
+
+
+#+end_src
+
+* Footnotes
+
+[fn:mdncors] https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS

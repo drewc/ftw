@@ -1,3 +1,1 @@
-;;  This is MY PACKAGE!!!
-(package: drewc
- depend: ("github.com/fare/gerbil-utils"))
+(package: drewc depend: (github.com/fare/gerbil-utils))

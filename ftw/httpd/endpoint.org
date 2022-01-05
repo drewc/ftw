@@ -315,13 +315,13 @@ is taken care of by the mux handler.
 
 #+begin_src gerbil :tangle "endpoint/mux.ss"
   (import :drewc/ftw/httpd/endpoint/queue :std/net/httpd/mux :std/net/httpd
-              :gerbil/gambit/exceptions :std/logger :clan/error)
+              :gerbil/gambit/exceptions :std/logger :std/format :clan/error)
   (export #t) 
   (defstruct endpoint-http-mux
     (queue sort-every reset-every handler error-handler 404-handler)
     constructor: :init!)
 
-  (def (default-endpoint-error-handler err req res)
+ (def (default-endpoint-error-handler err req res)
     (log-error
      (string-append "Endpoint Handler Error for" (http-request-path req)) err)
     (http-response-write

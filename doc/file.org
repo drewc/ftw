@@ -1,6 +1,6 @@
 #+TITLE: Files.
 
-We do a lot with files. Mainly, we want to serve them with a [[file:httpd/file-handler.org][file-handler]].
+We do a lot with files. Mainly, we want to serve them with a [[file:httpd/handler.org][handler]].
 
 
 * Usage

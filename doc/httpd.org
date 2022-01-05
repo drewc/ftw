@@ -1,3 +1,6 @@
+:PROPERTIES:
+:ID:       8bfa4b58-09bf-4011-b463-5cf7469346f5
+:END:
 #+TITLE: HTTPD: For The Web!
 
 
@@ -11,6 +14,7 @@
           :drewc/ftw/httpd/endpoint
           :drewc/ftw/httpd/cookies
           :drewc/ftw/httpd/parameters
+          :drewc/ftw/httpd/json
           :std/net/httpd
           :std/net/socket
           :std/os/socket)
@@ -18,6 +22,7 @@
           (import: :drewc/ftw/httpd/endpoint)
           (import: :drewc/ftw/httpd/cookies)
           (import: :drewc/ftw/httpd/parameters)
+          (import: :drewc/ftw/httpd/json)
           (import: :std/net/httpd)
            #t)
 
