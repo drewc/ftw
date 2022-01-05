@@ -68,7 +68,7 @@ Set-Cookie: <cookie-name>=<cookie-value>; Domain=<domain-value>; Secure; HttpOnl
 * Cookie to String
 
 #+BEGIN_SRC scheme
-  (import :ftw/timestamp :clan/utils/base)
+  (import :ftw/timestamp :clan/base)
 
   (def (cookie->string cookie)
 

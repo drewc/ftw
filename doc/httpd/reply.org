@@ -10,7 +10,7 @@ What we'll plan to do is piece together a *reply* that listens to the
   (export #t)
   (import :ftw/http-status-code
 	  :std/generic
-	  :clan/utils/base)
+	  :clan/base)
 
   (defclass reply
     (content-type
