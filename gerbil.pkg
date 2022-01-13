@@ -1,1 +1,3 @@
-(package: drewc depend: (github.com/fare/gerbil-utils))
+;; All in ftw package
+(package: drewc
+ depend: ("github.com/fare/gerbil-utils"))
