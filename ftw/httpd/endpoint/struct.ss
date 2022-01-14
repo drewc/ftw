@@ -1,11 +1,9 @@
-;; [[file:../endpoint.org::*endpoint/struct.ss][endpoint/struct.ss:1]]
   (import :std/net/httpd 
-          :std/pregexp :gerbil/expander
+          :std/pregexp ;:gerbil/expander
           :std/sugar :std/format :std/srfi/95 :std/iter :std/error
          :drewc/ftw/httpd/handler)
   (export #t)
 
-  ;; [[[[file:~/.gerbil/pkg/github.com/drewc/ftw/ftw/httpd/endpoint.org::*endpoint/struct.ss][endpoint/struct.ss]]][]]
     (defstruct endpoint (name match handler) constructor: :init!)
   
     (defmethod {:init! endpoint}
@@ -19,21 +17,15 @@
         (lambda (req res)
           (let (args (predicate? req))
             (and args (begin0 #t (handler req res args)))))))
-  ;; ends here
-  ;; [[[[file:~/.gerbil/pkg/github.com/drewc/ftw/ftw/httpd/endpoint.org::*endpoint/struct.ss][endpoint/struct.ss]]][]]
     (def (endpoint-pregexp-match-predicate endpoint)
       (lambda (request (path (http-request-path request)))
         (let ((groups (pregexp-match (endpoint-match endpoint) path)))
           (and groups (cdr groups)))))
-  ;; ends here
-  ;; [[[[file:~/.gerbil/pkg/github.com/drewc/ftw/ftw/httpd/endpoint.org::*endpoint/struct.ss][endpoint/struct.ss]]][]]
     (defmethod {endpoint-match-predicate endpoint}
       (lambda (self (m (endpoint-match self)))
         (cond ((string? m) (endpoint-pregexp-match-predicate self))
               ((procedure? m) m)
               (#t (error "Endpoint Match is not a string or a procedure")))))
-  ;; ends here
-  ;; [[[[file:~/.gerbil/pkg/github.com/drewc/ftw/ftw/httpd/endpoint.org::*endpoint/struct.ss][endpoint/struct.ss]]][]]
     (def (endpoint-name->handler name)
       (defsyntax (handler stx)
         (syntax-case stx  ()
@@ -60,6 +52,3 @@
                        req res)))))))))
       (let (ctx (gx#current-expander-context))
           (handler GET HEAD POST PUT DELETE CONNECT OPTIONS TRACE PATCH)))
-  
-  ;; ends here
-;; endpoint/struct.ss:1 ends here

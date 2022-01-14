@@ -231,9 +231,38 @@ that are accepted wrap it up.
   - ~mux:~ :: the mux this endpoint will be added to.  
 
 #+begin_src gerbil 
-  (defsyntax (define-endpoint stx)
-    (syntax-case stx ()
-      ((macro name match args ...)
+(defsyntax (define-endpoint stx)
+  (def (one-handler name ns method)
+    (let (n (string->symbol
+              (string-append
+               (if (symbol? ns) (symbol->string ns) ns)
+               "#"
+               (symbol->string name) "/" (symbol->string method))))
+      `(let ((handler
+              (or ,method
+                  (begin
+                    (let ((bound?
+                           (##with-exception-catcher
+                            (lambda (e) #f)
+                            (lambda () (let ((t (eval ',n)))
+                                    (and (procedure? t)
+                                         (eval '(lambda args (apply ,n args)))))))))
+                      (if bound? (set! ,method bound?) #f))
+                    ,method))))
+         (if handler (apply handler args) (error "No handler named ~a" ',n)))))
+  (def (handler name ns)
+    (let* ((methods
+                 '(GET HEAD POST PUT DELETE CONNECT OPTIONS TRACE PATCH))
+           (cases (map (lambda (m) `((,m) ,(one-handler name ns m))) methods)))
+      `(let ,(map (cut list <> #f) methods)
+         (lambda (req res args)
+         (let ((method (std/net/httpd/handler#http-request-method req)))
+           ((ftw-handler (case method ,@cases))
+            req res))))))
+  (syntax-case stx ()
+    ((macro name match args ...)
+     (let (ns (or (module-context-ns (current-expander-context))
+                  (expander-context-id (current-expander-context))))
        (let* ((props (syntax->datum #'(args ...)))
               (name (syntax->datum #'name))
               (m (syntax->datum #'match))
@@ -241,16 +270,19 @@ that are accepted wrap it up.
                        'drewc/ftw/httpd/endpoint#default-endpoint-http-mux))
               (p (pget priority: props))
               (h (pget handler: props))
-              (endpoint `(drewc/ftw/httpd/endpoint/struct#make-endpoint
-                          ',name ,m ,@(if h [handler: h] [])))
-              (defname (string->symbol
-                        (string-append (symbol->string name) "::endpoint")))
-              (form
-               `(begin (def ,defname ,endpoint)
-                       (drewc/ftw/httpd/endpoint/mux#add-endpoint-to-mux!
-                        ,defname ,mux ,@(if p [priority: p] []))
-                       ,defname)))
-         (datum->syntax #'macro form)))))
+              (endpoint
+               `(drewc/ftw/httpd/endpoint/struct#make-endpoint
+                 ',name ,m
+                 ,@(if h [handler: h]
+                         [handler: (handler name ns)])))
+                (defname (string->symbol
+                          (string-append (symbol->string name) "::endpoint")))
+                (form
+                 `(begin (def ,defname ,endpoint)
+                         (drewc/ftw/httpd/endpoint/mux#add-endpoint-to-mux!
+                          ,defname ,mux ,@(if p [priority: p] []))
+                         ,defname)))
+           (datum->syntax #'macro form))))))
 #+end_src
 
 
@@ -285,12 +317,15 @@ that are accepted wrap it up.
       (check (request-status r3) => 404)
       (check (request-text r4) => (request-text r1))))
 #+end_src
+
+
 #+begin_src gerbil  :tangle "endpoint.ss" :noweb yes :noweb-ref endpoint.ss
   (import :drewc/ftw/httpd/endpoint/struct
           :drewc/ftw/httpd/endpoint/queue
           :drewc/ftw/httpd/endpoint/mux
+          (for-syntax ./handler)
           (for-syntax  :drewc/ftw/httpd/endpoint/struct)
-           :gerbil/expander)
+           (for-syntax :gerbil/expander) :std/format)
   (export #t
    (import: :drewc/ftw/httpd/endpoint/queue)
    (import: :drewc/ftw/httpd/endpoint/struct)
@@ -745,7 +780,7 @@ request.
 #+end_src
 
 ** Handling a matched request
-re
+
 If a request matches the predicate, it returns a list of arguments to be passed
 to the handler. By default, a handler is a function, ~name/METHOD~.
 
@@ -947,9 +982,9 @@ Let's make sure it works!
 
 ** endpoint/struct.ss 
 
-#+begin_src gerbil :tangle endpoint/struct.ss :noweb yes :comments noweb
+#+begin_src gerbil :tangle endpoint/struct.ss :noweb yes
   (import :std/net/httpd 
-          :std/pregexp :gerbil/expander
+          :std/pregexp ;:gerbil/expander
           :std/sugar :std/format :std/srfi/95 :std/iter :std/error
          :drewc/ftw/httpd/handler)
   (export #t)
@@ -969,7 +1004,7 @@ Let's make sure it works!
 
 #+end_src
 
-#+begin_src gerbil  :noweb yes :comments noweb :noweb-ref endpoint-q-code-tangled
+#+begin_src gerbil  :noweb yes :noweb-ref endpoint-q-code-tangled
   <<endpoint-q-code>>
 #+end_src
 

@@ -3,13 +3,10 @@
   (import :std/srfi/1 :std/srfi/95 :std/iter :drewc/ftw/httpd/endpoint/struct :std/sugar)
   (export #t)
 
-    ;; [[[[file:~/.gerbil/pkg/github.com/drewc/ftw/ftw/httpd/endpoint.org::*endpoint/queue.ss][endpoint/queue.ss]]][]]
       (defstruct endpoint-queue (hit-counter priorities default-priority) constructor: :init!)
     
       (defmethod {:init! endpoint-queue}
         (cut struct-instance-init! <> (make-hash-table-eq) [] 42))
-    ;; ends here
-    ;; [[[[file:~/.gerbil/pkg/github.com/drewc/ftw/ftw/httpd/endpoint.org::*endpoint/queue.ss][endpoint/queue.ss]]][]]
       (def (find-queued ep q)
         (let/cc yup!
           (begin0 #f
@@ -17,8 +14,6 @@
               (when (eq? (endpoint-name k)
                          (endpoint-name ep))
                 (yup! k))))))
-    ;; ends here
-    ;; [[[[file:~/.gerbil/pkg/github.com/drewc/ftw/ftw/httpd/endpoint.org::*endpoint/queue.ss][endpoint/queue.ss]]][]]
       (def (endpoint-queue-endpoint-hits q ep)
         (hash-ref (endpoint-queue-hit-counter q) ep 0))
     
@@ -32,8 +27,6 @@
         (map-endpoint-queue (lambda (n ep) (increment-endpoint-hit-count! q ep)) q))
     
     
-    ;; ends here
-    ;; [[[[file:~/.gerbil/pkg/github.com/drewc/ftw/ftw/httpd/endpoint.org::*endpoint/queue.ss][endpoint/queue.ss]]][]]
       (def (sort-endpoint-queue! q)
         (sort! (endpoint-queue-priorities q) < car)
         (for ([_ . eps] (endpoint-queue-priorities q))
@@ -53,8 +46,6 @@
              (lambda (_ ep?) (if (eq? ep? ep) (k n) (set! n (1+ n)))) q)
             (k #f))))
     
-    ;; ends here
-    ;; [[[[file:~/.gerbil/pkg/github.com/drewc/ftw/ftw/httpd/endpoint.org::*endpoint/queue.ss][endpoint/queue.ss]]][]]
       (def (remove-endpoint-from-queue! e q)
         (awhen (e (find-queued e q))
           (for (pair (endpoint-queue-priorities q))
@@ -63,8 +54,6 @@
                (if (member e eps) (set! (cdr pair) (remove (cut eq? e <>) eps))))))
           (hash-remove! (endpoint-queue-hit-counter q) e)
             (sort-endpoint-queue! q)))
-    ;; ends here
-    ;; [[[[file:~/.gerbil/pkg/github.com/drewc/ftw/ftw/httpd/endpoint.org::*endpoint/queue.ss][endpoint/queue.ss]]][]]
       (def (add-endpoint-to-queue!
             endpoint queue
             priority: (priority (endpoint-queue-default-priority queue)))
@@ -79,8 +68,6 @@
             (sort-endpoint-queue! queue))
           (begin (remove-endpoint-from-queue! endpoint queue)
                  (add-endpoint-to-queue! endpoint queue priority: priority))))
-    ;; ends here
-    ;; [[[[file:~/.gerbil/pkg/github.com/drewc/ftw/ftw/httpd/endpoint.org::*endpoint/queue.ss][endpoint/queue.ss]]][]]
       (def (endpoint-queue-dispatch-function queue)
         (lambda (req res)
           (def pq (endpoint-queue-priorities queue))
@@ -94,4 +81,3 @@
                     (k #t)))))
             ;; If here, fail
             (k #f))))
-    ;; ends here
