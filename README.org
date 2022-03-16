@@ -16,7 +16,7 @@ See https://github.com/vyzo/gerbil.
 
 ** Installation
 
-It is available as a ~gxpkg~ from *[[http://github.com/drewc/gerbil-ftw][github.com/drewc/ftw]]*.
+It is available as a ~gxpkg~ from *[[http://github.com/drewc/druix][github.com/drewc/druix]]*.
 
 #+BEGIN_SRC sh
 gxpkg install github.com/drewc/ftw
