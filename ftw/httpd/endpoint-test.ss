@@ -3,9 +3,9 @@
               :drewc/ftw/httpd/endpoint/struct
               :drewc/ftw/httpd/endpoint/queue
               :drewc/ftw/httpd/endpoint/mux
-              :gerbil/gambit/exceptions
-              :gerbil/gambit/ports
-              (only-in :gerbil/gambit/random random-integer))
+              #;:gerbil/gambit/exceptions
+              #;:gerbil/gambit/ports
+              #;(only-in :gerbil/gambit/random random-integer))
 
      (import :std/test :std/net/httpd :std/net/request)
   
@@ -102,7 +102,7 @@
                            (lambda (req res args)
                              (displayln "Dis!"))))
         
-          (let (strp (open-string ""))
+          (let (strp (##open-string ""))
             (check (parameterize ((current-output-port strp))
                       ((endpoint-dispatcher end-dis::endpoint)
                      
@@ -155,7 +155,7 @@
                   
                      ;; Make sure the hit counter works
                   
-                     (let ((hits (+ 10 (random-integer 100))))
+                     (let ((hits (+ 10 (##random-integer 100))))
                        (map (cut add-endpoint-to-queue! <> eq) [ep1 ep2 ep3 ep4])
                        (add-endpoint-to-queue! ep4-aussi eq priority: 1)
                        (check (endpoint-queue-endpoint-hits eq ep1) => 0)
@@ -167,7 +167,7 @@
                        (reset-endpoint-queue-hit-counter! eq))
                      ;; Now, 4-aussi comes first, and it should be the only hit for /ep4
                   
-                     (let ((hits (+ 10 (random-integer 100))))
+                     (let ((hits (+ 10 (##random-integer 100))))
                        (check (endpoint-queue-endpoint-index eq ep4-aussi) => 0)
                        (check (endpoint-queue-endpoint-hits eq ep4) => 0)
                        (check (endpoint-queue-endpoint-hits eq ep4-aussi) => 0)
@@ -179,9 +179,9 @@
                   
                     ;; ;; Finally, the actual sorting.
                   
-                      (let* ((hits (+ 10 (random-integer 1000)))
+                      (let* ((hits (+ 10 (##random-integer 1000)))
                              (count [[1 . 0] [2 . 0] [3 . 0] [4 . 0]])
-                             (ran (cut 1+ (random-integer 4)))
+                             (ran (cut 1+ (##random-integer 4)))
                              (hit (lambda ((r (ran))) (test-http-get (format "/ep~a" r ))
                                      (set!  (cdr (assoc r count))
                                       (1+ (cdr (assoc r count)))))))

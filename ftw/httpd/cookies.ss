@@ -2,7 +2,7 @@
 (export #t)
 
 (def (http-request-cookies req)
-  (let* ((hs (http-request-headers*))
+  (let* ((hs (http-request-headers* req))
          (cj (assget "Cookie" hs))
          (cookies
           (and cj (map (lambda (c) (match (map string-trim (string-split c #\=))

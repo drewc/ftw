@@ -7,7 +7,7 @@
         :drewc/ftw/httpd/cookies
         :drewc/ftw/httpd/parameters
         :std/net/httpd
-        :std/net/socket
+        #;:std/net/socket
         :std/os/socket)
 (export (import: :drewc/ftw/httpd/handler)
         (import: :drewc/ftw/httpd/endpoint)

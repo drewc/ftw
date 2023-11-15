@@ -1,6 +1,6 @@
 (import :clan/timestamp
         :std/srfi/19
-        (rename-in :gerbil/gambit/os (time? time??)))
+        #;(rename-in :gerbil/gambit (time? time??)))
 
 (export #t (import: :clan/timestamp))
 

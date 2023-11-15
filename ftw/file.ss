@@ -1,7 +1,7 @@
 (export #t file-size file-exists?)
 (import
   :drewc/ftw/file/mime-type :drewc/ftw/timestamp :std/format :std/sugar
-  (only-in :gerbil/gambit/os
+  (only-in :gerbil/gambit
            file-info-last-modification-time
            file-info file-size file-exists?)
   :std/pregexp :std/srfi/1 :std/srfi/13 :std/misc/process)
